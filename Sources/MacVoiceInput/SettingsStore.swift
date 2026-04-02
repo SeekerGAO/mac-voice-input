@@ -2,6 +2,12 @@ import Foundation
 
 @MainActor
 final class SettingsStore: ObservableObject {
+    enum KeychainStatus {
+        case idle
+        case saved
+        case failed
+    }
+
     private enum Keys {
         static let selectedLanguage = "selectedLanguage"
         static let llmEnabled = "llmEnabled"
@@ -27,8 +33,10 @@ final class SettingsStore: ObservableObject {
             do {
                 try keychainStore.saveAPIKey(apiKey)
                 lastKeychainError = nil
+                keychainStatus = apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .saved
             } catch {
-                lastKeychainError = error.localizedDescription
+                lastKeychainError = AppStrings(language: selectedLanguage).errorMessage(for: error)
+                keychainStatus = .failed
             }
         }
     }
@@ -44,6 +52,7 @@ final class SettingsStore: ObservableObject {
     private let defaults: UserDefaults
     private let keychainStore: KeychainStore
     @Published private(set) var lastKeychainError: String?
+    @Published private(set) var keychainStatus: KeychainStatus = .idle
 
     init(defaults: UserDefaults = .standard, keychainStore: KeychainStore = KeychainStore()) {
         self.defaults = defaults
@@ -58,8 +67,10 @@ final class SettingsStore: ObservableObject {
 
         do {
             self.apiKey = try keychainStore.readAPIKey()
+            self.keychainStatus = self.apiKey.isEmpty ? .idle : .saved
         } catch {
-            self.lastKeychainError = error.localizedDescription
+            self.lastKeychainError = AppStrings(language: self.selectedLanguage).errorMessage(for: error)
+            self.keychainStatus = .failed
         }
     }
 

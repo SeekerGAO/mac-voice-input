@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureState: CaptureState = .idle
     private var pendingStopSessionID: UUID?
     private var lastUserMessage: String?
+    private var strings: AppStrings { AppStrings(language: settings.selectedLanguage) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
@@ -48,7 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "Voice Input")
         statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = "Hold Fn to record voice input"
+        statusItem.button?.toolTip = strings.holdFnTooltip
+        floatingPanel.setLanguage(settings.selectedLanguage)
         rebuildMenu()
     }
 
@@ -72,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotkeyMonitor.start()
         if !hotkeyMonitor.isMonitoringAvailable {
-            showUserMessage("Grant Accessibility and Input Monitoring")
+            showUserMessage(strings.permissionAccessHint)
         }
     }
 
@@ -80,24 +82,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
 
         let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
-        let diagnosticsItem = NSMenuItem(title: "Permission Diagnostics", action: nil, keyEquivalent: "")
+        let diagnosticsItem = NSMenuItem(title: strings.permissionDiagnostics, action: nil, keyEquivalent: "")
         let diagnosticsMenu = NSMenu()
-        diagnosticsMenu.addItem(makeStatusItem(title: "Microphone", state: diagnostics.microphone))
-        diagnosticsMenu.addItem(makeStatusItem(title: "Speech Recognition", state: diagnostics.speechRecognition))
-        diagnosticsMenu.addItem(makeStatusItem(title: "Accessibility", state: diagnostics.accessibility))
-        diagnosticsMenu.addItem(makeStatusItem(title: "Input Monitoring (Inferred)", state: diagnostics.inputMonitoring))
+        diagnosticsMenu.addItem(makeSummaryStatusItem(diagnostics: diagnostics))
         diagnosticsMenu.addItem(.separator())
-        let openPrivacyItem = NSMenuItem(title: "Open Privacy Settings", action: #selector(openPrivacySettings), keyEquivalent: "")
+        diagnosticsMenu.addItem(makeStatusItem(title: localizedMicrophoneTitle(), state: diagnostics.microphone))
+        diagnosticsMenu.addItem(makeStatusItem(title: localizedSpeechTitle(), state: diagnostics.speechRecognition))
+        diagnosticsMenu.addItem(makeStatusItem(title: localizedAccessibilityTitle(), state: diagnostics.accessibility))
+        diagnosticsMenu.addItem(makeStatusItem(title: localizedInputMonitoringTitle(), state: diagnostics.inputMonitoring))
+        diagnosticsMenu.addItem(.separator())
+        let openPrivacyItem = NSMenuItem(title: strings.openPrivacySettings, action: #selector(openPrivacySettings), keyEquivalent: "")
         openPrivacyItem.target = self
         diagnosticsMenu.addItem(openPrivacyItem)
-        let guideItem = NSMenuItem(title: "Open First-Run Guide", action: #selector(openOnboardingGuide), keyEquivalent: "")
+        let guideItem = NSMenuItem(title: strings.openFirstRunGuide, action: #selector(openOnboardingGuide), keyEquivalent: "")
         guideItem.target = self
         diagnosticsMenu.addItem(guideItem)
         diagnosticsItem.submenu = diagnosticsMenu
         menu.addItem(diagnosticsItem)
         menu.addItem(.separator())
 
-        let languageMenuItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
+        let languageMenuItem = NSMenuItem(title: strings.languageMenu, action: nil, keyEquivalent: "")
         let languageMenu = NSMenu()
         for language in LanguageOption.allCases {
             let item = NSMenuItem(title: language.title, action: #selector(selectLanguage(_:)), keyEquivalent: "")
@@ -109,22 +113,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         languageMenuItem.submenu = languageMenu
         menu.addItem(languageMenuItem)
 
-        let llmMenuItem = NSMenuItem(title: "LLM Refinement", action: nil, keyEquivalent: "")
+        let llmMenuItem = NSMenuItem(title: strings.llmRefinement, action: nil, keyEquivalent: "")
         let llmMenu = NSMenu()
-        let enabledItem = NSMenuItem(title: "Enable Refinement", action: #selector(toggleLLM(_:)), keyEquivalent: "")
+        let enabledItem = NSMenuItem(title: strings.enableRefinement, action: #selector(toggleLLM(_:)), keyEquivalent: "")
         enabledItem.target = self
         enabledItem.state = settings.llmEnabled ? .on : .off
         enabledItem.isEnabled = settings.llmConfiguration != nil
         llmMenu.addItem(enabledItem)
 
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
+        let settingsItem = NSMenuItem(title: strings.settings, action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         llmMenu.addItem(settingsItem)
         llmMenuItem.submenu = llmMenu
         menu.addItem(llmMenuItem)
 
         if diagnostics.hasBlockingIssue {
-            let guidanceItem = NSMenuItem(title: "Permissions required before recording works", action: nil, keyEquivalent: "")
+            let guidanceItem = NSMenuItem(title: strings.permissionsRequired, action: nil, keyEquivalent: "")
             guidanceItem.isEnabled = false
             menu.addItem(guidanceItem)
             menu.addItem(.separator())
@@ -137,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(.separator())
         }
 
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: strings.quit, action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -151,13 +155,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         settings.selectedLanguage = language
+        statusItem.button?.toolTip = strings.holdFnTooltip
+        floatingPanel.setLanguage(language)
         rebuildMenu()
     }
 
     @objc
     private func toggleLLM(_ sender: NSMenuItem) {
         guard settings.llmConfiguration != nil else {
-            showUserMessage("Configure API settings first")
+            showUserMessage(strings.configureAPISettingsFirst)
             rebuildMenu()
             return
         }
@@ -196,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard case .idle = captureState else { return }
         let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
         guard !diagnostics.hasBlockingIssue else {
-            showUserMessage("请先完成权限授权")
+            showUserMessage(strings.completePermissionsFirst)
             openOnboardingGuide()
             return
         }
@@ -222,8 +228,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
                 captureState = .idle
-                showUserMessage(error.localizedDescription)
-                floatingPanel.showMessage(error.localizedDescription)
+                let message = strings.errorMessage(for: error)
+                showUserMessage(message)
+                floatingPanel.showMessage(message)
                 try? await Task.sleep(for: .seconds(1))
                 floatingPanel.hide()
             }
@@ -266,9 +273,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     finalText = try await refineWithTimeout(text: transcript, configuration: configuration)
                 } catch {
                     if let refinementError = error as? RefinementError, refinementError == .timeout {
-                        showUserMessage("LLM refinement timed out, using raw transcript")
+                        showUserMessage(strings.llmTimedOutFallback)
                     } else {
-                        showUserMessage("LLM refinement failed, using raw transcript")
+                        showUserMessage(strings.llmFailedFallback)
                     }
                     finalText = transcript
                 }
@@ -309,8 +316,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeStatusItem(title: String, state: PermissionState) -> NSMenuItem {
-        let item = NSMenuItem(title: "\(title): \(state.title)", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "\(statusPrefix(for: state)) \(title)", action: nil, keyEquivalent: "")
+        item.toolTip = state.title(for: settings.selectedLanguage)
         item.isEnabled = false
         return item
     }
+
+    private func makeSummaryStatusItem(diagnostics: PermissionDiagnostics) -> NSMenuItem {
+        let hasIssues = diagnostics.hasBlockingIssue || diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined
+        let title = hasIssues ? strings.permissionIssuesFound : strings.permissionAllGood
+        let icon = hasIssues ? "⚠" : "✓"
+        let item = NSMenuItem(title: "\(icon) \(title)", action: nil, keyEquivalent: "")
+        item.attributedTitle = NSAttributedString(
+            string: "\(icon) \(title)",
+            attributes: [
+                .foregroundColor: hasIssues ? NSColor.systemOrange : NSColor.systemGreen,
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            ]
+        )
+        item.isEnabled = false
+        return item
+    }
+
+    private func statusPrefix(for state: PermissionState) -> String {
+        switch state {
+        case .granted:
+            return "✓"
+        case .notDetermined:
+            return "◌"
+        case .denied, .inferredUnavailable:
+            return "⚠"
+        }
+    }
+
+    private func localizedMicrophoneTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Microphone"
+        case .simplifiedChinese: return "麦克风"
+        case .traditionalChinese: return "麥克風"
+        case .japanese: return "マイク"
+        case .korean: return "마이크"
+        }
+    }
+
+    private func localizedSpeechTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Speech Recognition"
+        case .simplifiedChinese: return "语音识别"
+        case .traditionalChinese: return "語音辨識"
+        case .japanese: return "音声認識"
+        case .korean: return "음성 인식"
+        }
+    }
+
+    private func localizedAccessibilityTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Accessibility"
+        case .simplifiedChinese: return "辅助功能"
+        case .traditionalChinese: return "輔助使用"
+        case .japanese: return "アクセシビリティ"
+        case .korean: return "손쉬운 사용"
+        }
+    }
+
+    private func localizedInputMonitoringTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Input Monitoring (Inferred)"
+        case .simplifiedChinese: return "输入监控（推断）"
+        case .traditionalChinese: return "輸入監控（推斷）"
+        case .japanese: return "入力監視（推定）"
+        case .korean: return "입력 모니터링(추정)"
+        }
+    }
+
 }

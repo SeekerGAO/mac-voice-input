@@ -12,14 +12,16 @@ final class FloatingPanelViewModel: ObservableObject {
     @Published var transcript: String = ""
     @Published var barLevels: [CGFloat] = Array(repeating: 0.2, count: 5)
     @Published var status: Status = .listening
+    @Published var language: LanguageOption = .defaultOption
 
     var displayText: String {
+        let strings = AppStrings(language: language)
         switch status {
         case .listening:
             let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "正在聆听…" : trimmed
+            return trimmed.isEmpty ? strings.listeningPlaceholder : trimmed
         case .refining:
-            return "Refining…"
+            return strings.refiningText
         case .message(let text):
             return text
         }

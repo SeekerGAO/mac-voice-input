@@ -8,6 +8,11 @@ final class FloatingPanelController {
     private var panel: NSPanel?
     private var isVisible = false
 
+    func setLanguage(_ language: LanguageOption) {
+        viewModel.language = language
+        updateSize(animated: false)
+    }
+
     func showListening() {
         ensurePanel()
         viewModel.status = .listening
