@@ -5,11 +5,25 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController {
     private let settings: SettingsStore
     private let hotkeyMonitor: HotkeyMonitor
+    private let onRefreshPermissions: @MainActor () async -> PermissionDiagnostics
+    private let onRequestMediaPermissions: @MainActor () async -> PermissionDiagnostics
 
-    init(settings: SettingsStore, hotkeyMonitor: HotkeyMonitor) {
+    init(
+        settings: SettingsStore,
+        hotkeyMonitor: HotkeyMonitor,
+        onRefreshPermissions: @escaping @MainActor () async -> PermissionDiagnostics,
+        onRequestMediaPermissions: @escaping @MainActor () async -> PermissionDiagnostics
+    ) {
         self.settings = settings
         self.hotkeyMonitor = hotkeyMonitor
-        let view = OnboardingView(settings: settings, hotkeyMonitor: hotkeyMonitor)
+        self.onRefreshPermissions = onRefreshPermissions
+        self.onRequestMediaPermissions = onRequestMediaPermissions
+        let view = OnboardingView(
+            settings: settings,
+            hotkeyMonitor: hotkeyMonitor,
+            onRefreshPermissions: onRefreshPermissions,
+            onRequestMediaPermissions: onRequestMediaPermissions
+        )
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "首次启动引导"
@@ -39,12 +53,22 @@ final class OnboardingWindowController: NSWindowController {
 private struct OnboardingView: View {
     @ObservedObject var settings: SettingsStore
     let hotkeyMonitor: HotkeyMonitor
+    let onRefreshPermissions: @MainActor () async -> PermissionDiagnostics
+    let onRequestMediaPermissions: @MainActor () async -> PermissionDiagnostics
     @State private var diagnostics: PermissionDiagnostics
+    @State private var isRefreshing = false
     @Environment(\.dismiss) private var dismiss
 
-    init(settings: SettingsStore, hotkeyMonitor: HotkeyMonitor) {
+    init(
+        settings: SettingsStore,
+        hotkeyMonitor: HotkeyMonitor,
+        onRefreshPermissions: @escaping @MainActor () async -> PermissionDiagnostics,
+        onRequestMediaPermissions: @escaping @MainActor () async -> PermissionDiagnostics
+    ) {
         self.settings = settings
         self.hotkeyMonitor = hotkeyMonitor
+        self.onRefreshPermissions = onRefreshPermissions
+        self.onRequestMediaPermissions = onRequestMediaPermissions
         _diagnostics = State(initialValue: PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable))
     }
 
@@ -102,6 +126,14 @@ private struct OnboardingView: View {
                     PermissionDiagnosticsService.openPrivacySettings()
                 }
 
+                Button(strings.requestPermissionsButton) {
+                    Task {
+                        isRefreshing = true
+                        diagnostics = await onRequestMediaPermissions()
+                        isRefreshing = false
+                    }
+                }
+
                 Spacer()
 
                 if diagnostics.hasBlockingIssue {
@@ -115,10 +147,19 @@ private struct OnboardingView: View {
 
             HStack(spacing: 12) {
                 Button(localizedRecheckButton(for: settings.selectedLanguage)) {
-                    diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
+                    Task {
+                        isRefreshing = true
+                        diagnostics = await onRefreshPermissions()
+                        isRefreshing = false
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+
+                if isRefreshing {
+                    Text(strings.refreshingPermissions)
+                        .foregroundStyle(.secondary)
+                }
 
                 if !diagnostics.hasBlockingIssue {
                     Button(localizedStartUsingButton(for: settings.selectedLanguage)) {
@@ -128,6 +169,12 @@ private struct OnboardingView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                 }
+            }
+
+            if diagnostics.inputMonitoring == .inferredUnavailable {
+                Text(strings.restartMayBeRequired)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(24)

@@ -94,6 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openPrivacyItem = NSMenuItem(title: strings.openPrivacySettings, action: #selector(openPrivacySettings), keyEquivalent: "")
         openPrivacyItem.target = self
         diagnosticsMenu.addItem(openPrivacyItem)
+        let rebuildItem = NSMenuItem(title: strings.rebuildMonitoring, action: #selector(rebuildMonitoring), keyEquivalent: "")
+        rebuildItem.target = self
+        diagnosticsMenu.addItem(rebuildItem)
+        let refreshItem = NSMenuItem(title: strings.refreshPermissionState, action: #selector(refreshPermissionState), keyEquivalent: "")
+        refreshItem.target = self
+        diagnosticsMenu.addItem(refreshItem)
         let guideItem = NSMenuItem(title: strings.openFirstRunGuide, action: #selector(openOnboardingGuide), keyEquivalent: "")
         guideItem.target = self
         diagnosticsMenu.addItem(guideItem)
@@ -187,10 +193,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc
     private func openOnboardingGuide() {
         if onboardingWindowController == nil {
-            onboardingWindowController = OnboardingWindowController(settings: settings, hotkeyMonitor: hotkeyMonitor)
+            onboardingWindowController = OnboardingWindowController(
+                settings: settings,
+                hotkeyMonitor: hotkeyMonitor,
+                onRefreshPermissions: { [weak self] in
+                    await self?.refreshPermissionDiagnostics() ?? PermissionDiagnosticsService.current(hotkeyMonitorAvailable: false)
+                },
+                onRequestMediaPermissions: { [weak self] in
+                    await self?.requestMediaPermissionsAndRefresh() ?? PermissionDiagnosticsService.current(hotkeyMonitorAvailable: false)
+                }
+            )
         }
         settings.hasSeenOnboarding = true
         onboardingWindowController?.show()
+    }
+
+    @objc
+    private func rebuildMonitoring() {
+        Task { @MainActor in
+            hotkeyMonitor.refresh()
+            rebuildMenu()
+            showUserMessage(strings.monitoringRebuilt)
+        }
+    }
+
+    @objc
+    private func refreshPermissionState() {
+        Task { @MainActor in
+            _ = await refreshPermissionDiagnostics()
+            showUserMessage(strings.permissionStateRefreshed)
+        }
     }
 
     @objc
@@ -200,18 +232,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginRecording() {
         guard case .idle = captureState else { return }
-        let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
-        guard !diagnostics.hasBlockingIssue else {
-            showUserMessage(strings.completePermissionsFirst)
-            openOnboardingGuide()
-            return
-        }
-        let sessionID = UUID()
-        captureState = .starting(sessionID)
-        pendingStopSessionID = nil
-        lastUserMessage = nil
-        floatingPanel.showListening()
         Task {
+            let diagnostics = await requestMediaPermissionsAndRefreshIfNeeded()
+            guard !diagnostics.hasBlockingIssue else {
+                showUserMessage(strings.completePermissionsFirst)
+                if diagnostics.inputMonitoring == .inferredUnavailable {
+                    showUserMessage(strings.restartMayBeRequired)
+                }
+                openOnboardingGuide()
+                return
+            }
+
+            let sessionID = UUID()
+            captureState = .starting(sessionID)
+            pendingStopSessionID = nil
+            lastUserMessage = nil
+            floatingPanel.showListening()
+
             do {
                 try await speechRecognizer.start(language: settings.selectedLanguage)
                 guard case .starting(let activeSessionID) = captureState, activeSessionID == sessionID else {
@@ -315,15 +352,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openOnboardingGuide()
     }
 
+    private func requestMediaPermissionsAndRefreshIfNeeded() async -> PermissionDiagnostics {
+        hotkeyMonitor.refresh()
+        var diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
+        if diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined {
+            await speechRecognizer.requestPermissions()
+            hotkeyMonitor.refresh()
+            diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
+            rebuildMenu()
+        }
+        return diagnostics
+    }
+
+    private func requestMediaPermissionsAndRefresh() async -> PermissionDiagnostics {
+        await speechRecognizer.requestPermissions()
+        return await refreshPermissionDiagnostics()
+    }
+
+    private func refreshPermissionDiagnostics() async -> PermissionDiagnostics {
+        hotkeyMonitor.refresh()
+        let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
+        rebuildMenu()
+        return diagnostics
+    }
+
     private func makeStatusItem(title: String, state: PermissionState) -> NSMenuItem {
-        let item = NSMenuItem(title: "\(statusPrefix(for: state)) \(title): \(state.title(for: settings.selectedLanguage))", action: nil, keyEquivalent: "")
-        item.attributedTitle = NSAttributedString(
-            string: "\(statusPrefix(for: state)) \(title): \(state.title(for: settings.selectedLanguage))",
+        let prefix = statusPrefix(for: state)
+        let text = "\(prefix) \(title): \(state.title(for: settings.selectedLanguage))"
+        let attributed = NSMutableAttributedString(
+            string: text,
             attributes: [
-                .foregroundColor: statusColor(for: state),
+                .foregroundColor: NSColor.labelColor,
                 .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
             ]
         )
+        attributed.addAttributes(
+            [.foregroundColor: statusColor(for: state)],
+            range: NSRange(location: 0, length: (prefix as NSString).length)
+        )
+
+        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        item.attributedTitle = attributed
         item.toolTip = state.title(for: settings.selectedLanguage)
         item.isEnabled = false
         return item
@@ -333,14 +402,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hasIssues = diagnostics.hasBlockingIssue || diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined
         let title = hasIssues ? strings.permissionIssuesFound : strings.permissionAllGood
         let icon = hasIssues ? "⚠" : "✓"
-        let item = NSMenuItem(title: "\(icon) \(title)", action: nil, keyEquivalent: "")
-        item.attributedTitle = NSAttributedString(
-            string: "\(icon) \(title)",
+        let text = "\(icon) \(title)"
+        let attributed = NSMutableAttributedString(
+            string: text,
             attributes: [
-                .foregroundColor: hasIssues ? NSColor.systemOrange : NSColor.systemGreen,
+                .foregroundColor: NSColor.labelColor,
                 .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
             ]
         )
+        attributed.addAttributes(
+            [.foregroundColor: hasIssues ? NSColor.systemOrange : NSColor.systemGreen],
+            range: NSRange(location: 0, length: (icon as NSString).length)
+        )
+
+        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        item.attributedTitle = attributed
         item.isEnabled = false
         return item
     }

@@ -83,6 +83,46 @@ struct AppStrings {
         }
     }
 
+    var rebuildMonitoring: String {
+        switch language {
+        case .english: return "Rebuild Monitoring"
+        case .simplifiedChinese: return "重建监听"
+        case .traditionalChinese: return "重建監聽"
+        case .japanese: return "監視を再構築"
+        case .korean: return "모니터링 다시 초기화"
+        }
+    }
+
+    var refreshPermissionState: String {
+        switch language {
+        case .english: return "Reinitialize Permission State"
+        case .simplifiedChinese: return "重新初始化权限状态"
+        case .traditionalChinese: return "重新初始化權限狀態"
+        case .japanese: return "権限状態を再初期化"
+        case .korean: return "권한 상태 다시 초기화"
+        }
+    }
+
+    var monitoringRebuilt: String {
+        switch language {
+        case .english: return "Monitoring has been rebuilt."
+        case .simplifiedChinese: return "监听已重建。"
+        case .traditionalChinese: return "監聽已重建。"
+        case .japanese: return "監視を再構築しました。"
+        case .korean: return "모니터링을 다시 초기화했습니다."
+        }
+    }
+
+    var permissionStateRefreshed: String {
+        switch language {
+        case .english: return "Permission state has been refreshed."
+        case .simplifiedChinese: return "权限状态已刷新。"
+        case .traditionalChinese: return "權限狀態已重新整理。"
+        case .japanese: return "権限状態を更新しました。"
+        case .korean: return "권한 상태를 새로 고쳤습니다."
+        }
+    }
+
     var languageMenu: String {
         switch language {
         case .english: return "Language"
@@ -318,6 +358,36 @@ struct AppStrings {
         case .traditionalChinese: return "請授予輔助使用與輸入監控權限"
         case .japanese: return "アクセシビリティと入力監視を許可してください"
         case .korean: return "손쉬운 사용 및 입력 모니터링 권한을 허용하세요"
+        }
+    }
+
+    var requestPermissionsButton: String {
+        switch language {
+        case .english: return "Request Microphone & Speech Permissions"
+        case .simplifiedChinese: return "请求麦克风和语音识别权限"
+        case .traditionalChinese: return "請求麥克風與語音辨識權限"
+        case .japanese: return "マイクと音声認識の権限を要求"
+        case .korean: return "마이크 및 음성 인식 권한 요청"
+        }
+    }
+
+    var refreshingPermissions: String {
+        switch language {
+        case .english: return "Refreshing permission state…"
+        case .simplifiedChinese: return "正在刷新权限状态…"
+        case .traditionalChinese: return "正在重新整理權限狀態…"
+        case .japanese: return "権限状態を更新中…"
+        case .korean: return "권한 상태를 새로 고치는 중…"
+        }
+    }
+
+    var restartMayBeRequired: String {
+        switch language {
+        case .english: return "Input Monitoring may require reopening the app after granting access."
+        case .simplifiedChinese: return "输入监控权限在授权后可能需要重新打开应用才会生效。"
+        case .traditionalChinese: return "輸入監控權限在授權後可能需要重新打開應用才會生效。"
+        case .japanese: return "入力監視の権限は、許可後にアプリの再起動が必要な場合があります。"
+        case .korean: return "입력 모니터링 권한은 허용 후 앱을 다시 열어야 적용될 수 있습니다."
         }
     }
 

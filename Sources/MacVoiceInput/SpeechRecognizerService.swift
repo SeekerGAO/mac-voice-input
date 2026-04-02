@@ -31,6 +31,15 @@ final class SpeechRecognizerService {
     var onTranscript: ((String) -> Void)?
     var onMeter: (([CGFloat]) -> Void)?
 
+    func requestPermissions() async {
+        _ = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { _ in
+                continuation.resume(returning: ())
+            }
+        }
+        _ = await AVCaptureDevice.requestAccess(for: .audio)
+    }
+
     func start(language: LanguageOption) async throws {
         try await requestPermissionsIfNeeded()
 

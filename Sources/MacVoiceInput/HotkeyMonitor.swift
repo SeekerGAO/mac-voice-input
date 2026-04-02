@@ -43,7 +43,13 @@ final class HotkeyMonitor {
         }
         runLoopSource = nil
         eventTap = nil
+        isFnDown = false
         isMonitoringAvailable = false
+    }
+
+    func refresh() {
+        stop()
+        start()
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
