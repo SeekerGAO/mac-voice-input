@@ -31,20 +31,53 @@ final class SpeechRecognizerService {
     var onTranscript: ((String) -> Void)?
     var onMeter: (([CGFloat]) -> Void)?
 
-    func requestPermissions() async {
-        _ = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { _ in
-                Task { @MainActor in
-                    continuation.resume(returning: ())
-                }
-            }
+    var microphonePermissionState: PermissionState {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            return .granted
+        case .denied, .restricted:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .denied
         }
-        _ = await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                Task { @MainActor in
-                    continuation.resume(returning: granted)
+    }
+
+    var speechPermissionState: PermissionState {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            return .granted
+        case .denied, .restricted:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .denied
+        }
+    }
+
+    func requestPermissions() async {
+        if speechPermissionState == .notDetermined {
+            _ = await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { _ in
+                    Task { @MainActor in
+                        continuation.resume(returning: ())
+                    }
                 }
             }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+
+        if microphonePermissionState == .notDetermined {
+            _ = await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    Task { @MainActor in
+                        continuation.resume(returning: granted)
+                    }
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(200))
         }
     }
 
@@ -111,24 +144,30 @@ final class SpeechRecognizerService {
     }
 
     private func requestPermissionsIfNeeded() async throws {
-        let speechAuthorized = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                Task { @MainActor in
-                    continuation.resume(returning: status == .authorized)
+        if speechPermissionState == .notDetermined {
+            _ = await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { _ in
+                    Task { @MainActor in
+                        continuation.resume(returning: ())
+                    }
                 }
             }
         }
+        let speechAuthorized = speechPermissionState == .granted
         guard speechAuthorized else {
             throw SpeechRecognizerError.speechAuthorizationDenied
         }
 
-        let micAuthorized = await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                Task { @MainActor in
-                    continuation.resume(returning: granted)
+        if microphonePermissionState == .notDetermined {
+            _ = await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    Task { @MainActor in
+                        continuation.resume(returning: granted)
+                    }
                 }
             }
         }
+        let micAuthorized = microphonePermissionState == .granted
         guard micAuthorized else {
             throw SpeechRecognizerError.microphoneAuthorizationDenied
         }

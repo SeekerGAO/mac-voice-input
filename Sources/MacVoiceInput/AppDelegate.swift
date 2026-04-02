@@ -112,6 +112,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let requestPermissionsItem = NSMenuItem(title: strings.requestMediaPermissionsMenu, action: #selector(requestMediaPermissionsFromMenu), keyEquivalent: "")
         requestPermissionsItem.target = self
         diagnosticsMenu.addItem(requestPermissionsItem)
+        let requestAccessibilityItem = NSMenuItem(title: strings.requestAccessibilityPermissionMenu, action: #selector(requestAccessibilityPermissionFromMenu), keyEquivalent: "")
+        requestAccessibilityItem.target = self
+        diagnosticsMenu.addItem(requestAccessibilityItem)
+        let requestInputMonitoringItem = NSMenuItem(title: strings.requestInputMonitoringPermissionMenu, action: #selector(requestInputMonitoringPermissionFromMenu), keyEquivalent: "")
+        requestInputMonitoringItem.target = self
+        diagnosticsMenu.addItem(requestInputMonitoringItem)
         let rebuildItem = NSMenuItem(title: strings.rebuildMonitoring, action: #selector(rebuildMonitoring), keyEquivalent: "")
         rebuildItem.target = self
         diagnosticsMenu.addItem(rebuildItem)
@@ -230,6 +236,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func requestMediaPermissionsFromMenu() {
         Task { @MainActor in
             _ = await requestMediaPermissionsAndRefresh()
+            showUserMessage(strings.permissionStateRefreshed)
+        }
+    }
+
+    @objc
+    private func requestAccessibilityPermissionFromMenu() {
+        Task { @MainActor in
+            _ = PermissionDiagnosticsService.requestAccessibilityPermission()
+            _ = await refreshPermissionDiagnostics()
+            showUserMessage(strings.permissionStateRefreshed)
+        }
+    }
+
+    @objc
+    private func requestInputMonitoringPermissionFromMenu() {
+        Task { @MainActor in
+            _ = PermissionDiagnosticsService.requestInputMonitoringPermission()
+            _ = await refreshPermissionDiagnostics()
             showUserMessage(strings.permissionStateRefreshed)
         }
     }
@@ -391,6 +415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined {
             NSApp.activate(ignoringOtherApps: true)
             await speechRecognizer.requestPermissions()
+            try? await Task.sleep(for: .milliseconds(250))
             hotkeyMonitor.refresh()
             diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
             rebuildMenu()
@@ -401,6 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func requestMediaPermissionsAndRefresh() async -> PermissionDiagnostics {
         NSApp.activate(ignoringOtherApps: true)
         await speechRecognizer.requestPermissions()
+        try? await Task.sleep(for: .milliseconds(250))
         return await refreshPermissionDiagnostics()
     }
 
