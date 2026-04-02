@@ -31,23 +31,34 @@ struct ChatCompletionResponse: Decodable {
 
 enum LLMRefinerError: LocalizedError {
     case invalidBaseURL
+    case insecureBaseURL
     case badStatus(Int)
     case emptyResponse
+    case transcriptTooLong
 
     var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
             return "Invalid API Base URL."
+        case .insecureBaseURL:
+            return "Only HTTPS API endpoints are allowed, except localhost for local development."
         case .badStatus(let statusCode):
             return "Server returned HTTP \(statusCode)."
         case .emptyResponse:
             return "Model response was empty."
+        case .transcriptTooLong:
+            return "Transcript is too long for refinement."
         }
     }
 }
 
 struct LLMRefiner {
+    private let maxTranscriptLength = 4000
+
     func refine(text: String, configuration: LLMConfiguration) async throws -> String {
+        guard text.count <= maxTranscriptLength else {
+            throw LLMRefinerError.transcriptTooLong
+        }
         let endpoint = try endpointURL(from: configuration.baseURL)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -99,10 +110,25 @@ struct LLMRefiner {
         guard var url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw LLMRefinerError.invalidBaseURL
         }
+        if !isAllowedScheme(url) {
+            throw LLMRefinerError.insecureBaseURL
+        }
         if !url.path.hasSuffix("/chat/completions") {
             url.append(path: "chat")
             url.append(path: "completions")
         }
         return url
+    }
+
+    private func isAllowedScheme(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        if scheme == "https" {
+            return true
+        }
+        if scheme == "http" {
+            let host = url.host?.lowercased() ?? ""
+            return host == "localhost" || host == "127.0.0.1"
+        }
+        return false
     }
 }

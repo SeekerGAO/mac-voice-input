@@ -9,7 +9,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: hostingController)
         window.title = "LLM Refinement Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 460, height: 250))
+        window.setContentSize(NSSize(width: 500, height: 300))
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
@@ -52,7 +52,7 @@ private struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
 
                 Text("API Key")
-                TextField("sk-...", text: $draftAPIKey)
+                SecureField("sk-...", text: $draftAPIKey)
                     .textFieldStyle(.roundedBorder)
 
                 Text("Model")
@@ -60,22 +60,28 @@ private struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            if let keychainError = settings.lastKeychainError {
+                Text("Keychain error: \(keychainError)")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
             HStack(spacing: 12) {
                 Button(isTesting ? "Testing…" : "Test") {
                     testConnection()
                 }
-                .disabled(isTesting)
+                .disabled(isTesting || draftBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button("Save") {
                     settings.apiBaseURL = draftBaseURL
                     settings.apiKey = draftAPIKey
                     settings.model = draftModel
-                    testResult = "Saved."
+                    testResult = settings.lastKeychainError == nil ? "Saved." : "Saved, but the API key was not written to Keychain."
                 }
 
                 Text(testResult)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
             }
             Spacer()
         }

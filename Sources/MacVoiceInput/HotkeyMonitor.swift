@@ -8,6 +8,7 @@ final class HotkeyMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isFnDown = false
+    private(set) var isMonitoringAvailable = false
 
     func start() {
         guard eventTap == nil else { return }
@@ -24,6 +25,7 @@ final class HotkeyMonitor {
             callback: callback,
             userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         ) else {
+            isMonitoringAvailable = false
             return
         }
 
@@ -32,6 +34,7 @@ final class HotkeyMonitor {
         CGEvent.tapEnable(tap: tap, enable: true)
         eventTap = tap
         runLoopSource = source
+        isMonitoringAvailable = true
     }
 
     func stop() {
@@ -40,6 +43,7 @@ final class HotkeyMonitor {
         }
         runLoopSource = nil
         eventTap = nil
+        isMonitoringAvailable = false
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {

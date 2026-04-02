@@ -6,8 +6,8 @@ final class SettingsStore: ObservableObject {
         static let selectedLanguage = "selectedLanguage"
         static let llmEnabled = "llmEnabled"
         static let apiBaseURL = "apiBaseURL"
-        static let apiKey = "apiKey"
         static let model = "model"
+        static let hasSeenOnboarding = "hasSeenOnboarding"
     }
 
     @Published var selectedLanguage: LanguageOption {
@@ -23,23 +23,44 @@ final class SettingsStore: ObservableObject {
     }
 
     @Published var apiKey: String {
-        didSet { defaults.set(apiKey, forKey: Keys.apiKey) }
+        didSet {
+            do {
+                try keychainStore.saveAPIKey(apiKey)
+                lastKeychainError = nil
+            } catch {
+                lastKeychainError = error.localizedDescription
+            }
+        }
     }
 
     @Published var model: String {
         didSet { defaults.set(model, forKey: Keys.model) }
     }
 
-    private let defaults: UserDefaults
+    @Published var hasSeenOnboarding: Bool {
+        didSet { defaults.set(hasSeenOnboarding, forKey: Keys.hasSeenOnboarding) }
+    }
 
-    init(defaults: UserDefaults = .standard) {
+    private let defaults: UserDefaults
+    private let keychainStore: KeychainStore
+    @Published private(set) var lastKeychainError: String?
+
+    init(defaults: UserDefaults = .standard, keychainStore: KeychainStore = KeychainStore()) {
         self.defaults = defaults
+        self.keychainStore = keychainStore
         let savedLanguage = defaults.string(forKey: Keys.selectedLanguage).flatMap(LanguageOption.init(rawValue:))
         self.selectedLanguage = savedLanguage ?? .defaultOption
         self.llmEnabled = defaults.object(forKey: Keys.llmEnabled) as? Bool ?? false
         self.apiBaseURL = defaults.string(forKey: Keys.apiBaseURL) ?? ""
-        self.apiKey = defaults.string(forKey: Keys.apiKey) ?? ""
         self.model = defaults.string(forKey: Keys.model) ?? ""
+        self.hasSeenOnboarding = defaults.object(forKey: Keys.hasSeenOnboarding) as? Bool ?? false
+        self.apiKey = ""
+
+        do {
+            self.apiKey = try keychainStore.readAPIKey()
+        } catch {
+            self.lastKeychainError = error.localizedDescription
+        }
     }
 
     var llmConfiguration: LLMConfiguration? {
