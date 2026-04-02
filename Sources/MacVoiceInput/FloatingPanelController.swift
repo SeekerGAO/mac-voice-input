@@ -1,10 +1,14 @@
 import AppKit
 import SwiftUI
 
+private final class TransparentHostingView<Content: View>: NSHostingView<Content> {
+    override var isOpaque: Bool { false }
+}
+
 @MainActor
 final class FloatingPanelController {
     private let viewModel = FloatingPanelViewModel()
-    private lazy var hostingView = NSHostingView(rootView: FloatingPanelView(viewModel: viewModel))
+    private lazy var hostingView = TransparentHostingView(rootView: FloatingPanelView(viewModel: viewModel))
     private var panel: NSPanel?
     private var isVisible = false
 
@@ -67,7 +71,7 @@ final class FloatingPanelController {
     private func ensurePanel() {
         guard panel == nil else { return }
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 240, height: 56),
+            contentRect: NSRect(x: 0, y: 0, width: 260, height: 74),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -75,23 +79,23 @@ final class FloatingPanelController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.level = .statusBar
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.hidesOnDeactivate = false
 
-        let effectView = NSVisualEffectView(frame: panel.contentRect(forFrameRect: panel.frame))
-        effectView.material = .hudWindow
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 28
-        effectView.layer?.masksToBounds = true
+        let containerView = NSView(frame: panel.contentRect(forFrameRect: panel.frame))
+        containerView.wantsLayer = true
+        containerView.layer?.cornerRadius = 37
+        containerView.layer?.masksToBounds = false
+        containerView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        hostingView.frame = effectView.bounds
+        hostingView.frame = containerView.bounds
         hostingView.autoresizingMask = [.width, .height]
         hostingView.wantsLayer = true
-        effectView.addSubview(hostingView)
-        panel.contentView = effectView
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
+        containerView.addSubview(hostingView)
+        panel.contentView = containerView
         panel.alphaValue = 0
         self.panel = panel
     }
@@ -118,7 +122,7 @@ final class FloatingPanelController {
     private func updateSize(animated: Bool) {
         guard let panel else { return }
         let targetWidth = viewModel.estimatedWidth()
-        let targetFrame = NSRect(origin: .zero, size: NSSize(width: targetWidth, height: 56))
+        let targetFrame = NSRect(origin: .zero, size: NSSize(width: targetWidth, height: 74))
         hostingView.frame = targetFrame
         var frame = panel.frame
         frame.size = targetFrame.size
