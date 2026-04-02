@@ -193,6 +193,56 @@ struct AppStrings {
         }
     }
 
+    var clearAPIKey: String {
+        switch language {
+        case .english: return "Clear API Key"
+        case .simplifiedChinese: return "清空 API Key"
+        case .traditionalChinese: return "清空 API Key"
+        case .japanese: return "API Key を消去"
+        case .korean: return "API Key 지우기"
+        }
+    }
+
+    var confirmClearAPIKeyTitle: String {
+        switch language {
+        case .english: return "Clear stored API Key?"
+        case .simplifiedChinese: return "确认清空已保存的 API Key？"
+        case .traditionalChinese: return "確認清空已儲存的 API Key？"
+        case .japanese: return "保存済みの API Key を消去しますか？"
+        case .korean: return "저장된 API Key를 지우시겠습니까?"
+        }
+    }
+
+    var confirmClearAPIKeyMessage: String {
+        switch language {
+        case .english: return "This removes the API Key from the field and from Keychain."
+        case .simplifiedChinese: return "这会同时清空输入框中的 API Key，并从钥匙串中删除。"
+        case .traditionalChinese: return "這會同時清空輸入欄中的 API Key，並從鑰匙圈中刪除。"
+        case .japanese: return "入力欄の API Key とキーチェーン内の保存内容を削除します。"
+        case .korean: return "입력 필드의 API Key와 키체인 저장 내용을 함께 삭제합니다."
+        }
+    }
+
+    var clearAction: String {
+        switch language {
+        case .english: return "Clear"
+        case .simplifiedChinese: return "清空"
+        case .traditionalChinese: return "清空"
+        case .japanese: return "消去"
+        case .korean: return "지우기"
+        }
+    }
+
+    var cancelAction: String {
+        switch language {
+        case .english: return "Cancel"
+        case .simplifiedChinese: return "取消"
+        case .traditionalChinese: return "取消"
+        case .japanese: return "キャンセル"
+        case .korean: return "취소"
+        }
+    }
+
     var modelLabel: String {
         switch language {
         case .english: return "Model"

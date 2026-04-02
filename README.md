@@ -29,9 +29,13 @@ Recommended screenshot content:
 - Streaming speech recognition using Apple Speech
 - Default language set to Simplified Chinese (`zh-CN`)
 - Menu switching for English, Simplified Chinese, Traditional Chinese, Japanese, and Korean
+- Localized UI text for menus, onboarding, floating HUD, and settings
 - Bottom-centered floating HUD with real RMS-driven waveform bars and live transcript
 - Clipboard-based paste injection with temporary ASCII input-source switching for CJK IMEs
 - Optional LLM refinement with configurable API base URL, API key, and model
+- Permission diagnostics menu with per-permission status indicators
+- First-run onboarding window with permission guidance and manual recheck flow
+- API Key stored in Keychain, with visible saved/failed status in settings
 
 ## Requirements
 
@@ -81,6 +85,13 @@ The app needs these macOS permissions to function correctly:
 
 Without Accessibility and Input Monitoring, global `Fn` monitoring and simulated paste will not work reliably.
 
+The menu bar includes a `Permission Diagnostics` section with:
+
+- Overall readiness summary
+- Per-permission status entries
+- Direct link to Privacy Settings
+- First-run guide entry
+
 ## LLM Refinement
 
 The app includes an `LLM Refinement` submenu in the menu bar:
@@ -93,6 +104,13 @@ The app includes an `LLM Refinement` submenu in the menu bar:
   - Model
 
 The API must be OpenAI-compatible and support a `/chat/completions` style endpoint.
+
+The settings window also supports:
+
+- Testing connectivity
+- Saving API credentials
+- Clearing the stored API Key with confirmation
+- Keychain save status feedback
 
 ## Notes for Repository Upload
 

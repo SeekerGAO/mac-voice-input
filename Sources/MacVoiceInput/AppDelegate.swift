@@ -316,7 +316,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeStatusItem(title: String, state: PermissionState) -> NSMenuItem {
-        let item = NSMenuItem(title: "\(statusPrefix(for: state)) \(title)", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "\(statusPrefix(for: state)) \(title): \(state.title(for: settings.selectedLanguage))", action: nil, keyEquivalent: "")
+        item.attributedTitle = NSAttributedString(
+            string: "\(statusPrefix(for: state)) \(title): \(state.title(for: settings.selectedLanguage))",
+            attributes: [
+                .foregroundColor: statusColor(for: state),
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            ]
+        )
         item.toolTip = state.title(for: settings.selectedLanguage)
         item.isEnabled = false
         return item
@@ -346,6 +353,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return "◌"
         case .denied, .inferredUnavailable:
             return "⚠"
+        }
+    }
+
+    private func statusColor(for state: PermissionState) -> NSColor {
+        switch state {
+        case .granted:
+            return .systemGreen
+        case .notDetermined:
+            return .systemYellow
+        case .denied, .inferredUnavailable:
+            return .systemOrange
         }
     }
 

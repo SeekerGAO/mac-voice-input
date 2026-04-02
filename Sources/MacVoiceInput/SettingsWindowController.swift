@@ -49,6 +49,7 @@ private struct SettingsView: View {
     @State private var draftModel: String
     @State private var testResult: String = ""
     @State private var isTesting = false
+    @State private var showClearAPIKeyConfirmation = false
 
     init(settings: SettingsStore, refiner: LLMRefiner) {
         self.settings = settings
@@ -96,6 +97,11 @@ private struct SettingsView: View {
                     testResult = settings.lastKeychainError == nil ? localizedSaved(for: settings.selectedLanguage) : localizedSavedWithKeychainWarning(for: settings.selectedLanguage)
                 }
 
+                Button(strings.clearAPIKey) {
+                    showClearAPIKeyConfirmation = true
+                }
+                .disabled(draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
                 Text(testResult)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
@@ -104,6 +110,20 @@ private struct SettingsView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .confirmationDialog(
+            strings.confirmClearAPIKeyTitle,
+            isPresented: $showClearAPIKeyConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(strings.clearAction, role: .destructive) {
+                draftAPIKey = ""
+                settings.apiKey = ""
+                testResult = localizedKeychainCleared(for: settings.selectedLanguage)
+            }
+            Button(strings.cancelAction, role: .cancel) {}
+        } message: {
+            Text(strings.confirmClearAPIKeyMessage)
+        }
     }
 
     private func testConnection() {
@@ -249,6 +269,16 @@ private struct SettingsView: View {
         case .traditionalChinese: return "API Key 無法儲存到鑰匙圈。"
         case .japanese: return "API Key をキーチェーンに保存できませんでした。"
         case .korean: return "API Key를 키체인에 저장하지 못했습니다."
+        }
+    }
+
+    private func localizedKeychainCleared(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "API Key cleared."
+        case .simplifiedChinese: return "API Key 已清空。"
+        case .traditionalChinese: return "API Key 已清空。"
+        case .japanese: return "API Key を消去しました。"
+        case .korean: return "API Key를 지웠습니다."
         }
     }
 }
