@@ -381,6 +381,26 @@ struct AppStrings {
         }
     }
 
+    var requestAccessibilityPermissionMenu: String {
+        switch language {
+        case .english: return "Request Accessibility Permission"
+        case .simplifiedChinese: return "请求辅助功能权限"
+        case .traditionalChinese: return "請求輔助使用權限"
+        case .japanese: return "アクセシビリティ権限を要求"
+        case .korean: return "손쉬운 사용 권한 요청"
+        }
+    }
+
+    var requestInputMonitoringPermissionMenu: String {
+        switch language {
+        case .english: return "Request Input Monitoring Permission"
+        case .simplifiedChinese: return "请求输入监控权限"
+        case .traditionalChinese: return "請求輸入監控權限"
+        case .japanese: return "入力監視の権限を要求"
+        case .korean: return "입력 모니터링 권한 요청"
+        }
+    }
+
     var refreshingPermissions: String {
         switch language {
         case .english: return "Refreshing permission state…"

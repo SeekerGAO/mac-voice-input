@@ -42,8 +42,8 @@ enum PermissionDiagnosticsService {
         PermissionDiagnostics(
             microphone: microphoneState(),
             speechRecognition: speechState(),
-            accessibility: AXIsProcessTrusted() ? .granted : .denied,
-            inputMonitoring: hotkeyMonitorAvailable ? .granted : .inferredUnavailable
+            accessibility: accessibilityState(),
+            inputMonitoring: inputMonitoringState(hotkeyMonitorAvailable: hotkeyMonitorAvailable)
         )
     }
 
@@ -52,6 +52,22 @@ enum PermissionDiagnosticsService {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+
+    @discardableResult
+    @MainActor
+    static func requestAccessibilityPermission() -> PermissionState {
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+        _ = CGRequestPostEventAccess()
+        return accessibilityState()
+    }
+
+    @discardableResult
+    @MainActor
+    static func requestInputMonitoringPermission() -> PermissionState {
+        _ = CGRequestListenEventAccess()
+        return inputMonitoringState(hotkeyMonitorAvailable: false)
     }
 
     private static func microphoneState() -> PermissionState {
@@ -78,5 +94,19 @@ enum PermissionDiagnosticsService {
         @unknown default:
             return .denied
         }
+    }
+
+    private static func accessibilityState() -> PermissionState {
+        if AXIsProcessTrusted() || CGPreflightPostEventAccess() {
+            return .granted
+        }
+        return .denied
+    }
+
+    private static func inputMonitoringState(hotkeyMonitorAvailable: Bool) -> PermissionState {
+        if CGPreflightListenEventAccess() || hotkeyMonitorAvailable {
+            return .granted
+        }
+        return .denied
     }
 }
