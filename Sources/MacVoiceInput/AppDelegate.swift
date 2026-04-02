@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configureServices()
+        configureNotifications()
         presentOnboardingIfNeeded()
     }
 
@@ -78,8 +79,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func configureNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
     private func rebuildMenu() {
         let menu = NSMenu()
+
+        let bundlePathItem = NSMenuItem(title: "Path: \(Bundle.main.bundlePath)", action: nil, keyEquivalent: "")
+        bundlePathItem.isEnabled = false
+        menu.addItem(bundlePathItem)
+        menu.addItem(.separator())
 
         let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
         let diagnosticsItem = NSMenuItem(title: strings.permissionDiagnostics, action: nil, keyEquivalent: "")
@@ -94,6 +109,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openPrivacyItem = NSMenuItem(title: strings.openPrivacySettings, action: #selector(openPrivacySettings), keyEquivalent: "")
         openPrivacyItem.target = self
         diagnosticsMenu.addItem(openPrivacyItem)
+        let requestPermissionsItem = NSMenuItem(title: strings.requestMediaPermissionsMenu, action: #selector(requestMediaPermissionsFromMenu), keyEquivalent: "")
+        requestPermissionsItem.target = self
+        diagnosticsMenu.addItem(requestPermissionsItem)
         let rebuildItem = NSMenuItem(title: strings.rebuildMonitoring, action: #selector(rebuildMonitoring), keyEquivalent: "")
         rebuildItem.target = self
         diagnosticsMenu.addItem(rebuildItem)
@@ -206,6 +224,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settings.hasSeenOnboarding = true
         onboardingWindowController?.show()
+    }
+
+    @objc
+    private func requestMediaPermissionsFromMenu() {
+        Task { @MainActor in
+            _ = await requestMediaPermissionsAndRefresh()
+            showUserMessage(strings.permissionStateRefreshed)
+        }
     }
 
     @objc
@@ -352,10 +378,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openOnboardingGuide()
     }
 
+    @objc
+    private func handleAppDidBecomeActive() {
+        Task { @MainActor in
+            _ = await refreshPermissionDiagnostics()
+        }
+    }
+
     private func requestMediaPermissionsAndRefreshIfNeeded() async -> PermissionDiagnostics {
         hotkeyMonitor.refresh()
         var diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
         if diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined {
+            NSApp.activate(ignoringOtherApps: true)
             await speechRecognizer.requestPermissions()
             hotkeyMonitor.refresh()
             diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
@@ -365,6 +399,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestMediaPermissionsAndRefresh() async -> PermissionDiagnostics {
+        NSApp.activate(ignoringOtherApps: true)
         await speechRecognizer.requestPermissions()
         return await refreshPermissionDiagnostics()
     }

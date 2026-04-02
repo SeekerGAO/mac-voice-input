@@ -34,10 +34,18 @@ final class SpeechRecognizerService {
     func requestPermissions() async {
         _ = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { _ in
-                continuation.resume(returning: ())
+                Task { @MainActor in
+                    continuation.resume(returning: ())
+                }
             }
         }
-        _ = await AVCaptureDevice.requestAccess(for: .audio)
+        _ = await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                Task { @MainActor in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
     }
 
     func start(language: LanguageOption) async throws {
@@ -105,14 +113,22 @@ final class SpeechRecognizerService {
     private func requestPermissionsIfNeeded() async throws {
         let speechAuthorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
+                Task { @MainActor in
+                    continuation.resume(returning: status == .authorized)
+                }
             }
         }
         guard speechAuthorized else {
             throw SpeechRecognizerError.speechAuthorizationDenied
         }
 
-        let micAuthorized = await AVCaptureDevice.requestAccess(for: .audio)
+        let micAuthorized = await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                Task { @MainActor in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
         guard micAuthorized else {
             throw SpeechRecognizerError.microphoneAuthorizationDenied
         }

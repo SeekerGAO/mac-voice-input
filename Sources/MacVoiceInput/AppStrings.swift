@@ -371,6 +371,16 @@ struct AppStrings {
         }
     }
 
+    var requestMediaPermissionsMenu: String {
+        switch language {
+        case .english: return "Request Mic & Speech Permissions"
+        case .simplifiedChinese: return "请求麦克风和语音识别权限"
+        case .traditionalChinese: return "請求麥克風與語音辨識權限"
+        case .japanese: return "マイクと音声認識の権限を要求"
+        case .korean: return "마이크 및 음성 인식 권한 요청"
+        }
+    }
+
     var refreshingPermissions: String {
         switch language {
         case .english: return "Refreshing permission state…"
