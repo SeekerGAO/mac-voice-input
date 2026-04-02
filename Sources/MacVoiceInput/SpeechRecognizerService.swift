@@ -20,13 +20,13 @@ enum SpeechRecognizerError: LocalizedError {
     }
 }
 
-@MainActor
-final class SpeechRecognizerService {
+final class SpeechRecognizerService: @unchecked Sendable {
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var latestTranscript = ""
     private let weights: [Float] = [0.5, 0.8, 1.0, 0.75, 0.55]
+    private let transcriptLock = NSLock()
 
     var onTranscript: ((String) -> Void)?
     var onMeter: (([CGFloat]) -> Void)?
@@ -87,7 +87,7 @@ final class SpeechRecognizerService {
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
-        latestTranscript = ""
+        setLatestTranscript("")
 
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.rawValue)),
               recognizer.isAvailable else {
@@ -100,17 +100,19 @@ final class SpeechRecognizerService {
         recognitionRequest = request
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
             if let result {
                 let transcript = result.bestTranscription.formattedString
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.latestTranscript = transcript
-                    self.onTranscript?(transcript)
+                self.setLatestTranscript(transcript)
+                let onTranscript = self.onTranscript
+                DispatchQueue.main.async {
+                    onTranscript?(transcript)
                 }
             }
             if error != nil || (result?.isFinal ?? false) {
-                Task { @MainActor [weak self] in
-                    self?.audioEngine.stop()
+                let audioEngine = self.audioEngine
+                DispatchQueue.main.async {
+                    audioEngine.stop()
                 }
             }
         }
@@ -121,10 +123,12 @@ final class SpeechRecognizerService {
         var meterEnvelope: Float = 0.1
         let weights = self.weights
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, request] buffer, _ in
+            guard let self else { return }
             request.append(buffer)
             let bars = Self.makeMeterLevels(from: buffer, weights: weights, envelope: &meterEnvelope)
-            Task { @MainActor in
-                self?.onMeter?(bars)
+            let onMeter = self.onMeter
+            DispatchQueue.main.async {
+                onMeter?(bars)
             }
         }
 
@@ -140,7 +144,7 @@ final class SpeechRecognizerService {
         recognitionTask?.finish()
         recognitionTask = nil
         recognitionRequest = nil
-        return latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        return latestTranscriptValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func requestPermissionsIfNeeded() async throws {
@@ -194,5 +198,17 @@ final class SpeechRecognizerService {
             let level = min(max(0.18 + (envelope * weight * 0.82), 0.18), 1.0) * (1 + jitter)
             return CGFloat(min(max(level, 0.18), 1.0))
         }
+    }
+
+    private var latestTranscriptValue: String {
+        transcriptLock.lock()
+        defer { transcriptLock.unlock() }
+        return latestTranscript
+    }
+
+    private func setLatestTranscript(_ transcript: String) {
+        transcriptLock.lock()
+        latestTranscript = transcript
+        transcriptLock.unlock()
     }
 }
