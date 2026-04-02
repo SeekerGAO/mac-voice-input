@@ -171,11 +171,6 @@ private struct OnboardingView: View {
                 }
             }
 
-            if diagnostics.inputMonitoring == .inferredUnavailable {
-                Text(strings.restartMayBeRequired)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
         }
         .padding(24)
         .frame(minWidth: 560, minHeight: 500)
@@ -449,7 +444,7 @@ private struct PermissionRow: View {
             return .green
         case .notDetermined:
             return .yellow
-        case .denied, .inferredUnavailable:
+        case .denied:
             return .red
         }
     }

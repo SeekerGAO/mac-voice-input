@@ -411,16 +411,6 @@ struct AppStrings {
         }
     }
 
-    var restartMayBeRequired: String {
-        switch language {
-        case .english: return "Input Monitoring may require reopening the app after granting access."
-        case .simplifiedChinese: return "输入监控权限在授权后可能需要重新打开应用才会生效。"
-        case .traditionalChinese: return "輸入監控權限在授權後可能需要重新打開應用才會生效。"
-        case .japanese: return "入力監視の権限は、許可後にアプリの再起動が必要な場合があります。"
-        case .korean: return "입력 모니터링 권한은 허용 후 앱을 다시 열어야 적용될 수 있습니다."
-        }
-    }
-
     func errorMessage(for error: Error) -> String {
         if let speechError = error as? SpeechRecognizerError {
             return speechError.message(for: language)
@@ -497,14 +487,6 @@ extension PermissionState {
             case .traditionalChinese: return "未決定"
             case .japanese: return "未決定"
             case .korean: return "미결정"
-            }
-        case (_, .inferredUnavailable):
-            switch language {
-            case .english: return "Unavailable (Inferred)"
-            case .simplifiedChinese: return "不可用（推断）"
-            case .traditionalChinese: return "不可用（推斷）"
-            case .japanese: return "利用不可（推定）"
-            case .korean: return "사용 불가(추정)"
             }
         }
     }

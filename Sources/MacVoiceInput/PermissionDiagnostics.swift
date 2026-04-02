@@ -8,7 +8,6 @@ enum PermissionState {
     case granted
     case denied
     case notDetermined
-    case inferredUnavailable
 
     var title: String {
         switch self {
@@ -18,8 +17,6 @@ enum PermissionState {
             return "Denied"
         case .notDetermined:
             return "Not Determined"
-        case .inferredUnavailable:
-            return "Unavailable (Inferred)"
         }
     }
 }
@@ -32,7 +29,7 @@ struct PermissionDiagnostics {
 
     var hasBlockingIssue: Bool {
         [microphone, speechRecognition, accessibility, inputMonitoring].contains { state in
-            state == .denied || state == .inferredUnavailable
+            state == .denied
         }
     }
 }

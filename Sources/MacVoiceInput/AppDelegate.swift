@@ -286,9 +286,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let diagnostics = await requestMediaPermissionsAndRefreshIfNeeded()
             guard !diagnostics.hasBlockingIssue else {
                 showUserMessage(strings.completePermissionsFirst)
-                if diagnostics.inputMonitoring == .inferredUnavailable {
-                    showUserMessage(strings.restartMayBeRequired)
-                }
                 openOnboardingGuide()
                 return
             }
@@ -488,7 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return "✓"
         case .notDetermined:
             return "◌"
-        case .denied, .inferredUnavailable:
+        case .denied:
             return "⚠"
         }
     }
@@ -499,7 +496,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .systemGreen
         case .notDetermined:
             return .systemYellow
-        case .denied, .inferredUnavailable:
+        case .denied:
             return .systemOrange
         }
     }
