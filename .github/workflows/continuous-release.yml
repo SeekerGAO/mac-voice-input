@@ -1,0 +1,100 @@
+name: Continuous Release
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: continuous-release-main
+  cancel-in-progress: true
+
+jobs:
+  publish-main-build:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Apple signing certificate
+        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/signing-cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build continuous release assets
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: ./scripts/release_package.sh "main-latest"
+
+      - name: Update rolling release tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f main-latest "${GITHUB_SHA}"
+          git push origin refs/tags/main-latest --force
+
+      - name: Prepare release notes
+        env:
+          SHORT_SHA: ${{ github.sha }}
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          ## Latest Main Build
+
+          This prerelease is updated automatically on every commit to \`main\`.
+
+          ### Download
+
+          - Recommended: \`MacVoiceInput-main-latest.dmg\`
+          - Fallback: \`MacVoiceInput-main-latest.zip\`
+
+          Open the DMG and drag \`MacVoiceInput.app\` into \`Applications\`.
+
+          ### Build Source
+
+          - Commit: \`${SHORT_SHA}\`
+          - Branch: \`main\`
+
+          ### Notes
+
+          - This is a rolling prerelease for the latest commit on \`main\`
+          - The app requires Microphone, Speech Recognition, Accessibility, and Input Monitoring permissions
+          - If the build is not Developer ID signed and notarized, macOS may ask the user to approve it manually on first launch
+          EOF
+
+      - name: Publish rolling prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: main-latest
+          name: Latest main build
+          prerelease: true
+          make_latest: false
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            dist/*
+          overwrite_files: true

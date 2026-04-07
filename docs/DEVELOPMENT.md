@@ -10,6 +10,7 @@
 ## CI/CD
 
 - `.github/workflows/ci.yml`: builds the app on macOS for pushes to `main` and pull requests, then uploads a CI artifact
+- `.github/workflows/continuous-release.yml`: builds a DMG on every push to `main` and updates a rolling prerelease for direct download
 - `.github/workflows/release.yml`: builds and publishes a tagged release to GitHub Releases
 - `scripts/release_package.sh`: shared packaging script used by the release workflow
 

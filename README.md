@@ -68,6 +68,7 @@ Generated app bundle:
 This repository includes a GitHub Actions pipeline for both day-to-day development and distributable releases:
 
 - `CI` workflow: runs on pushes to `main` and on pull requests, builds the app with `make build`, and uploads a zipped `.app` bundle as a workflow artifact
+- `Continuous Release` workflow: runs on every push to `main`, builds installable `.dmg` and `.zip` assets, and updates a rolling prerelease so users can always download the latest build
 - `Release` workflow: runs when you push a tag like `v1.0.0`, builds the macOS app, packages it into a versioned `.dmg` and `.zip`, generates SHA-256 checksums, and publishes all files to GitHub Releases
 
 Typical flow:
@@ -81,6 +82,14 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
+Continuous delivery flow:
+
+```bash
+git push origin main
+```
+
+After each push to `main`, GitHub updates the rolling prerelease tagged `main-latest` with fresh installable assets.
+
 Release assets are generated under:
 
 ```bash
@@ -91,6 +100,12 @@ dist/MacVoiceInput-v1.0.0.zip.sha256
 ```
 
 Users can download the packaged app directly from the GitHub Release page. The recommended installer is the `.dmg`, which opens with a normal macOS drag-to-Applications install flow.
+
+For the newest commit on `main`, use the rolling prerelease:
+
+```text
+https://github.com/SeekerGAO/mac-voice-input/releases/tag/main-latest
+```
 
 ### Optional Signing And Notarization
 
