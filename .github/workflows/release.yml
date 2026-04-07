@@ -68,15 +68,10 @@ jobs:
           EOF
 
       - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
-            gh release edit "${GITHUB_REF_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md"
-          else
-            gh release create "${GITHUB_REF_NAME}" dist/* \
-              --title "${GITHUB_REF_NAME}" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          fi
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            dist/*
