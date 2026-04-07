@@ -59,7 +59,9 @@ jobs:
 
           ### Download
 
-          Download `MacVoiceInput-${GITHUB_REF_NAME}.zip` from the assets below, extract it, and open `MacVoiceInput.app`.
+          Download `MacVoiceInput-${GITHUB_REF_NAME}.dmg` from the assets below, open it, and drag `MacVoiceInput.app` into `Applications`.
+
+          A `.zip` archive is also attached as a fallback download.
 
           ### Notes
 

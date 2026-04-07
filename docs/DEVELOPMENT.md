@@ -5,7 +5,7 @@
 - `make build`: compile the SwiftPM executable, package the `.app`, and apply ad-hoc signing
 - `make run`: build and launch the generated app bundle
 - `make install`: copy the app bundle into `/Applications`
-- `./scripts/release_package.sh v1.0.0`: build a distributable zip and checksum in `dist/`
+- `./scripts/release_package.sh v1.0.0`: build distributable `.dmg` and `.zip` packages plus checksums in `dist/`
 
 ## CI/CD
 
@@ -22,6 +22,8 @@
 
 Release output:
 
+- `MacVoiceInput-<tag>.dmg`
+- `MacVoiceInput-<tag>.dmg.sha256`
 - `MacVoiceInput-<tag>.zip`
 - `MacVoiceInput-<tag>.zip.sha256`
 

@@ -68,7 +68,7 @@ Generated app bundle:
 This repository includes a GitHub Actions pipeline for both day-to-day development and distributable releases:
 
 - `CI` workflow: runs on pushes to `main` and on pull requests, builds the app with `make build`, and uploads a zipped `.app` bundle as a workflow artifact
-- `Release` workflow: runs when you push a tag like `v1.0.0`, builds the macOS app, packages it into a versioned zip file, generates a SHA-256 checksum, and publishes both files to GitHub Releases
+- `Release` workflow: runs when you push a tag like `v1.0.0`, builds the macOS app, packages it into a versioned `.dmg` and `.zip`, generates SHA-256 checksums, and publishes all files to GitHub Releases
 
 Typical flow:
 
@@ -84,11 +84,13 @@ git push origin v1.0.0
 Release assets are generated under:
 
 ```bash
+dist/MacVoiceInput-v1.0.0.dmg
+dist/MacVoiceInput-v1.0.0.dmg.sha256
 dist/MacVoiceInput-v1.0.0.zip
 dist/MacVoiceInput-v1.0.0.zip.sha256
 ```
 
-Users can download the packaged app directly from the GitHub Release page.
+Users can download the packaged app directly from the GitHub Release page. The recommended installer is the `.dmg`, which opens with a normal macOS drag-to-Applications install flow.
 
 ### Optional Signing And Notarization
 
@@ -102,7 +104,7 @@ For the smoothest install experience on other Macs, configure these repository s
 - `APPLE_ID`: Apple ID used for notarization
 - `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization
 
-If these secrets are not set, the release workflow still publishes a downloadable app zip, but Gatekeeper may require users to manually approve the app on first launch.
+If these secrets are not set, the release workflow still publishes downloadable `.dmg` and `.zip` files, but Gatekeeper may require users to manually approve the app on first launch.
 
 ## Permissions
 

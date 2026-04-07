@@ -7,8 +7,11 @@ VERSION="${1:-dev}"
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
 BUILD_APP_PATH=".build/${BUILD_CONFIG}/${APP_NAME}.app"
 DIST_DIR="dist"
+DMG_STAGING_DIR="${DIST_DIR}/dmg-root"
+DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
 ARCHIVE_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.zip"
-CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
+DMG_CHECKSUM_PATH="${DMG_PATH}.sha256"
+ZIP_CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
 
 echo "Building ${APP_NAME} (${VERSION})"
 make build CONFIG="${BUILD_CONFIG}"
@@ -46,11 +49,26 @@ if [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE
 fi
 
 mkdir -p "${DIST_DIR}"
-rm -f "${ARCHIVE_PATH}" "${CHECKSUM_PATH}"
+rm -rf "${DMG_STAGING_DIR}"
+rm -f "${DMG_PATH}" "${DMG_CHECKSUM_PATH}" "${ARCHIVE_PATH}" "${ZIP_CHECKSUM_PATH}"
 
-echo "Creating distributable archive"
+echo "Creating DMG staging directory"
+mkdir -p "${DMG_STAGING_DIR}"
+cp -R "${BUILD_APP_PATH}" "${DMG_STAGING_DIR}/${APP_NAME}.app"
+ln -s /Applications "${DMG_STAGING_DIR}/Applications"
+
+echo "Creating distributable DMG"
+hdiutil create \
+  -volname "${APP_NAME}" \
+  -srcfolder "${DMG_STAGING_DIR}" \
+  -ov \
+  -format UDZO \
+  "${DMG_PATH}"
+
+echo "Creating fallback ZIP archive"
 ditto -c -k --sequesterRsrc --keepParent "${BUILD_APP_PATH}" "${ARCHIVE_PATH}"
-shasum -a 256 "${ARCHIVE_PATH}" > "${CHECKSUM_PATH}"
+shasum -a 256 "${DMG_PATH}" > "${DMG_CHECKSUM_PATH}"
+shasum -a 256 "${ARCHIVE_PATH}" > "${ZIP_CHECKSUM_PATH}"
 
 echo "Release assets:"
-ls -lh "${ARCHIVE_PATH}" "${CHECKSUM_PATH}"
+ls -lh "${DMG_PATH}" "${DMG_CHECKSUM_PATH}" "${ARCHIVE_PATH}" "${ZIP_CHECKSUM_PATH}"
