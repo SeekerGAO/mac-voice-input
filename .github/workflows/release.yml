@@ -42,6 +42,31 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: ./scripts/release_package.sh "${GITHUB_REF_NAME}"
 
+      - name: Prepare release notes
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          ## MacVoiceInput Release
+
+          MacVoiceInput is a macOS menu bar voice input app with hold-to-talk recording, live speech recognition, and optional AI text refinement.
+
+          ### Included in this release
+
+          - Menu bar voice input workflow for macOS 14+
+          - Hold `Fn` to record, release to transcribe and paste text
+          - Live floating HUD with waveform meter and transcript preview
+          - Permission diagnostics and onboarding flow
+          - Optional OpenAI-compatible LLM refinement
+
+          ### Download
+
+          Download `MacVoiceInput-${GITHUB_REF_NAME}.zip` from the assets below, extract it, and open `MacVoiceInput.app`.
+
+          ### Notes
+
+          - The app requires Microphone, Speech Recognition, Accessibility, and Input Monitoring permissions
+          - If this build is not Developer ID signed and notarized, macOS may ask the user to approve it manually on first launch
+          EOF
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,8 +74,9 @@ jobs:
           set -euo pipefail
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+            gh release edit "${GITHUB_REF_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md"
           else
             gh release create "${GITHUB_REF_NAME}" dist/* \
               --title "${GITHUB_REF_NAME}" \
-              --notes "Automated release for ${GITHUB_REF_NAME}."
+              --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
