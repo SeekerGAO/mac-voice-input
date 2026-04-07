@@ -92,7 +92,7 @@ struct FloatingPanelView: View {
         }
         .clipShape(Capsule())
         .frame(height: 74)
-        .frame(width: viewModel.estimatedWidth())
+        .frame(width: viewModel.panelWidth)
     }
 
     private var statusBadgeColor: Color {

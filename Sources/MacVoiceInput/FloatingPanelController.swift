@@ -27,6 +27,7 @@ final class FloatingPanelController {
 
     func updateTranscript(_ transcript: String) {
         guard panel != nil else { return }
+        guard viewModel.transcript != transcript || !matches(status: .listening) else { return }
         viewModel.status = .listening
         viewModel.transcript = transcript
         updateSize(animated: true)
@@ -34,6 +35,10 @@ final class FloatingPanelController {
 
     func showRefining(with transcript: String) {
         ensurePanel()
+        guard viewModel.transcript != transcript || !matches(status: .refining) else {
+            presentIfNeeded()
+            return
+        }
         viewModel.transcript = transcript
         viewModel.status = .refining
         updateSize(animated: true)
@@ -42,6 +47,10 @@ final class FloatingPanelController {
 
     func showMessage(_ message: String) {
         ensurePanel()
+        if case .message(let currentMessage) = viewModel.status, currentMessage == message {
+            presentIfNeeded()
+            return
+        }
         viewModel.status = .message(message)
         updateSize(animated: true)
         presentIfNeeded()
@@ -121,12 +130,23 @@ final class FloatingPanelController {
 
     private func updateSize(animated: Bool) {
         guard let panel else { return }
-        let targetWidth = viewModel.estimatedWidth()
+        let targetWidth = viewModel.panelWidth
         let targetFrame = NSRect(origin: .zero, size: NSSize(width: targetWidth, height: 74))
         hostingView.frame = targetFrame
         var frame = panel.frame
         frame.size = targetFrame.size
         position(panel: panel, proposedFrame: frame, animated: animated)
+    }
+
+    private func matches(status: FloatingPanelViewModel.Status) -> Bool {
+        switch (viewModel.status, status) {
+        case (.listening, .listening), (.refining, .refining):
+            return true
+        case (.message(let lhs), .message(let rhs)):
+            return lhs == rhs
+        default:
+            return false
+        }
     }
 
     private func position(panel: NSPanel, proposedFrame: NSRect? = nil, animated: Bool = false) {

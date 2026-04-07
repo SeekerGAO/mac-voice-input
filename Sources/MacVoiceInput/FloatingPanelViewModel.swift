@@ -14,6 +14,9 @@ final class FloatingPanelViewModel: ObservableObject {
     @Published var status: Status = .listening
     @Published var language: LanguageOption = .defaultOption
 
+    private var cachedWidth: CGFloat = 260
+    private var widthCacheKey: String = ""
+
     var displayText: String {
         let strings = AppStrings(language: language)
         switch status {
@@ -42,10 +45,10 @@ final class FloatingPanelViewModel: ObservableObject {
     var secondaryText: String {
         switch status {
         case .listening:
-            let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "Hold Fn and speak clearly" : trimmed
+            let trimmedTranscript = trimmedTranscript
+            return trimmedTranscript.isEmpty ? "Hold Fn and speak clearly" : trimmedTranscript
         case .refining:
-            return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedTranscript
         case .message(let text):
             return text
         }
@@ -62,11 +65,24 @@ final class FloatingPanelViewModel: ObservableObject {
         }
     }
 
-    func estimatedWidth() -> CGFloat {
+    var panelWidth: CGFloat {
+        let cacheKey = "\(language.rawValue)|\(titleText)|\(secondaryText)"
+        if cacheKey != widthCacheKey {
+            widthCacheKey = cacheKey
+            cachedWidth = estimateWidth(forTitle: titleText, detail: secondaryText)
+        }
+        return cachedWidth
+    }
+
+    private var trimmedTranscript: String {
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func estimateWidth(forTitle title: String, detail: String) -> CGFloat {
         let titleFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
         let detailFont = NSFont.systemFont(ofSize: 16, weight: .medium)
-        let titleWidth = (titleText as NSString).size(withAttributes: [.font: titleFont]).width
-        let detailWidth = (secondaryText as NSString).size(withAttributes: [.font: detailFont]).width
+        let titleWidth = (title as NSString).size(withAttributes: [.font: titleFont]).width
+        let detailWidth = (detail as NSString).size(withAttributes: [.font: detailFont]).width
         let width = max(titleWidth, detailWidth)
         return min(max(width + 160, 240), 620)
     }

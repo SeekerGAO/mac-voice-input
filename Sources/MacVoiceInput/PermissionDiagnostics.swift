@@ -4,7 +4,7 @@ import ApplicationServices
 import Foundation
 import Speech
 
-enum PermissionState {
+enum PermissionState: Equatable {
     case granted
     case denied
     case notDetermined
@@ -21,7 +21,7 @@ enum PermissionState {
     }
 }
 
-struct PermissionDiagnostics {
+struct PermissionDiagnostics: Equatable {
     let microphone: PermissionState
     let speechRecognition: PermissionState
     let accessibility: PermissionState

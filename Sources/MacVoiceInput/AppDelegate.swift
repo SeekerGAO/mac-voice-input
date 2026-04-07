@@ -2,6 +2,10 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private enum MenuRefresh {
+        static let debounceNanoseconds: UInt64 = 120_000_000
+    }
+
     private enum CaptureState {
         case idle
         case starting(UUID)
@@ -33,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureState: CaptureState = .idle
     private var pendingStopSessionID: UUID?
     private var lastUserMessage: String?
+    private var lastRenderedMenuState: MenuState?
+    private var rebuildMenuTask: Task<Void, Never>?
     private var strings: AppStrings { AppStrings(language: settings.selectedLanguage) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -89,6 +95,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func rebuildMenu() {
+        let menuState = MenuState(
+            language: settings.selectedLanguage,
+            llmEnabled: settings.llmEnabled,
+            llmConfigured: settings.llmConfiguration != nil,
+            hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable,
+            lastUserMessage: lastUserMessage
+        )
+        guard menuState != lastRenderedMenuState else { return }
+        lastRenderedMenuState = menuState
+
         let menu = NSMenu()
 
         let bundlePathItem = NSMenuItem(title: "Path: \(Bundle.main.bundlePath)", action: nil, keyEquivalent: "")
@@ -187,18 +203,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.selectedLanguage = language
         statusItem.button?.toolTip = strings.holdFnTooltip
         floatingPanel.setLanguage(language)
-        rebuildMenu()
+        invalidateMenuState()
     }
 
     @objc
     private func toggleLLM(_ sender: NSMenuItem) {
         guard settings.llmConfiguration != nil else {
             showUserMessage(strings.configureAPISettingsFirst)
-            rebuildMenu()
             return
         }
         settings.llmEnabled.toggle()
-        rebuildMenu()
+        invalidateMenuState()
     }
 
     @objc
@@ -390,7 +405,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showUserMessage(_ message: String) {
         lastUserMessage = message
-        rebuildMenu()
+        scheduleMenuRebuild()
     }
 
     private func presentOnboardingIfNeeded() {
@@ -415,7 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(250))
             hotkeyMonitor.refresh()
             diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
-            rebuildMenu()
+            invalidateMenuState()
         }
         return diagnostics
     }
@@ -430,8 +445,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshPermissionDiagnostics() async -> PermissionDiagnostics {
         hotkeyMonitor.refresh()
         let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
-        rebuildMenu()
+        invalidateMenuState()
         return diagnostics
+    }
+
+    private func scheduleMenuRebuild() {
+        rebuildMenuTask?.cancel()
+        rebuildMenuTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: MenuRefresh.debounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.rebuildMenu()
+        }
+    }
+
+    private func invalidateMenuState() {
+        lastRenderedMenuState = nil
+        scheduleMenuRebuild()
     }
 
     private func makeStatusItem(title: String, state: PermissionState) -> NSMenuItem {
@@ -540,5 +569,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .korean: return "입력 모니터링(추정)"
         }
     }
+}
 
+private struct MenuState: Equatable {
+    let language: LanguageOption
+    let llmEnabled: Bool
+    let llmConfigured: Bool
+    let hotkeyMonitorAvailable: Bool
+    let lastUserMessage: String?
 }

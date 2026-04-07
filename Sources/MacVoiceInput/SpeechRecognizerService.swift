@@ -1,6 +1,7 @@
 import Accelerate
 import AVFoundation
 import Foundation
+import QuartzCore
 import Speech
 
 enum SpeechRecognizerError: LocalizedError {
@@ -21,12 +22,23 @@ enum SpeechRecognizerError: LocalizedError {
 }
 
 final class SpeechRecognizerService: @unchecked Sendable {
+    private enum UpdateInterval {
+        static let transcript: TimeInterval = 0.12
+        static let meter: TimeInterval = 1.0 / 30.0
+    }
+
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var latestTranscript = ""
     private let weights: [Float] = [0.5, 0.8, 1.0, 0.75, 0.55]
     private let transcriptLock = NSLock()
+    private let updateLock = NSLock()
+    private var lastDeliveredTranscript = ""
+    private var pendingTranscript = ""
+    private var lastTranscriptDeliveryTime: CFTimeInterval = 0
+    private var pendingTranscriptTask: DispatchWorkItem?
+    private var lastMeterDeliveryTime: CFTimeInterval = 0
 
     var onTranscript: ((String) -> Void)?
     var onMeter: (([CGFloat]) -> Void)?
@@ -88,6 +100,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
         recognitionTask = nil
         recognitionRequest = nil
         setLatestTranscript("")
+        resetUpdateState()
 
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.rawValue)),
               recognizer.isAvailable else {
@@ -104,10 +117,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
             if let result {
                 let transcript = result.bestTranscription.formattedString
                 self.setLatestTranscript(transcript)
-                let onTranscript = self.onTranscript
-                DispatchQueue.main.async {
-                    onTranscript?(transcript)
-                }
+                self.scheduleTranscriptDelivery(transcript, immediate: result.isFinal)
             }
             if error != nil || (result?.isFinal ?? false) {
                 let audioEngine = self.audioEngine
@@ -126,10 +136,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
             guard let self else { return }
             request.append(buffer)
             let bars = Self.makeMeterLevels(from: buffer, weights: weights, envelope: &meterEnvelope)
-            let onMeter = self.onMeter
-            DispatchQueue.main.async {
-                onMeter?(bars)
-            }
+            self.scheduleMeterDelivery(bars)
         }
 
         audioEngine.prepare()
@@ -140,6 +147,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         recognitionRequest?.endAudio()
+        flushPendingTranscript()
         try? await Task.sleep(for: .milliseconds(320))
         recognitionTask?.finish()
         recognitionTask = nil
@@ -210,5 +218,91 @@ final class SpeechRecognizerService: @unchecked Sendable {
         transcriptLock.lock()
         latestTranscript = transcript
         transcriptLock.unlock()
+    }
+
+    private func resetUpdateState() {
+        updateLock.lock()
+        pendingTranscriptTask?.cancel()
+        pendingTranscriptTask = nil
+        pendingTranscript = ""
+        lastDeliveredTranscript = ""
+        lastTranscriptDeliveryTime = 0
+        lastMeterDeliveryTime = 0
+        updateLock.unlock()
+    }
+
+    private func flushPendingTranscript() {
+        let transcript: String?
+        updateLock.lock()
+        pendingTranscriptTask?.cancel()
+        pendingTranscriptTask = nil
+        transcript = pendingTranscript.isEmpty ? nil : pendingTranscript
+        pendingTranscript = ""
+        updateLock.unlock()
+
+        if let transcript {
+            deliverTranscript(transcript)
+        }
+    }
+
+    private func scheduleTranscriptDelivery(_ transcript: String, immediate: Bool) {
+        let workItem: DispatchWorkItem?
+        updateLock.lock()
+        pendingTranscript = transcript
+        pendingTranscriptTask?.cancel()
+
+        let now = CACurrentMediaTime()
+        let elapsed = now - lastTranscriptDeliveryTime
+        if immediate || elapsed >= UpdateInterval.transcript {
+            pendingTranscript = ""
+            workItem = nil
+        } else {
+            let delay = UpdateInterval.transcript - elapsed
+            let item = DispatchWorkItem { [weak self] in
+                self?.flushPendingTranscript()
+            }
+            pendingTranscriptTask = item
+            workItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        }
+        updateLock.unlock()
+
+        if workItem == nil {
+            deliverTranscript(transcript)
+        }
+    }
+
+    private func deliverTranscript(_ transcript: String) {
+        let handler: ((String) -> Void)?
+        updateLock.lock()
+        guard transcript != lastDeliveredTranscript else {
+            updateLock.unlock()
+            return
+        }
+        lastDeliveredTranscript = transcript
+        lastTranscriptDeliveryTime = CACurrentMediaTime()
+        handler = onTranscript
+        updateLock.unlock()
+
+        DispatchQueue.main.async {
+            handler?(transcript)
+        }
+    }
+
+    private func scheduleMeterDelivery(_ bars: [CGFloat]) {
+        let handler: (([CGFloat]) -> Void)?
+        updateLock.lock()
+        let now = CACurrentMediaTime()
+        guard now - lastMeterDeliveryTime >= UpdateInterval.meter else {
+            updateLock.unlock()
+            return
+        }
+        lastMeterDeliveryTime = now
+        handler = onMeter
+        updateLock.unlock()
+
+        DispatchQueue.main.async {
+            handler?(bars)
+        }
     }
 }
