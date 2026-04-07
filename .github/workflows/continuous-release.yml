@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - name: Install Apple signing certificate
         if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
@@ -50,14 +48,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: ./scripts/release_package.sh "main-latest"
-
-      - name: Update rolling release tag
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f main-latest "${GITHUB_SHA}"
-          git push origin refs/tags/main-latest --force
 
       - name: Prepare release notes
         env:
@@ -91,10 +81,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: main-latest
+          target_commitish: ${{ github.sha }}
           name: Latest main build
           prerelease: true
           make_latest: false
           body_path: ${{ runner.temp }}/release-notes.md
           files: |
             dist/*
-          overwrite_files: true
+          generate_release_notes: false
