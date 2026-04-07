@@ -63,6 +63,64 @@ make clean    # 清理构建产物
 .build/release/MacVoiceInput.app
 ```
 
+## 从开发到发布的工作流
+
+这个仓库已经包含完整的 GitHub Actions 流程，覆盖日常开发校验、持续发布和正式版本发布：
+
+- `CI` 工作流：在 `push main` 和 `pull_request` 时执行，使用 `make build` 构建应用，并上传 CI 构建产物
+- `Continuous Release` 工作流：在每次推送到 `main` 时执行，自动构建可安装的 `.dmg` 和 `.zip`，并更新一个固定的滚动预发布版本，方便用户始终下载最新构建
+- `Release` 工作流：在推送类似 `v1.0.0` 的 tag 时执行，自动打正式包、生成校验文件，并发布到 GitHub Releases
+
+典型正式发布流程：
+
+```bash
+git checkout main
+git pull
+# 完成功能开发
+git push origin main
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+持续发布流程：
+
+```bash
+git push origin main
+```
+
+每次推送到 `main` 后，GitHub 都会自动更新 `main-latest` 这个滚动预发布版本，并附上最新安装包。
+
+生成的发布产物：
+
+```bash
+dist/MacVoiceInput-v1.0.0.dmg
+dist/MacVoiceInput-v1.0.0.dmg.sha256
+dist/MacVoiceInput-v1.0.0.zip
+dist/MacVoiceInput-v1.0.0.zip.sha256
+```
+
+用户可以直接在 GitHub Release 页面下载。推荐下载 `.dmg`，打开后把 `MacVoiceInput.app` 拖到 `Applications` 即可安装。
+
+`main` 最新提交对应的滚动预发布地址：
+
+```text
+https://github.com/SeekerGAO/mac-voice-input/releases/tag/main-latest
+```
+
+### 可选的签名与公证
+
+如果希望其他用户安装时获得更平滑的 macOS 体验，建议在 GitHub 仓库中配置这些 secrets：
+
+- `APPLE_CERTIFICATE_BASE64`：Developer ID Application 证书（`.p12`）的 base64 内容
+- `APPLE_CERTIFICATE_PASSWORD`：证书密码
+- `APPLE_KEYCHAIN_PASSWORD`：GitHub Actions 中临时 keychain 的密码
+- `APPLE_SIGNING_IDENTITY`：完整签名身份，例如 `Developer ID Application: Your Name (TEAMID)`
+- `APPLE_TEAM_ID`：Apple Developer 团队 ID
+- `APPLE_ID`：用于公证的 Apple ID
+- `APPLE_APP_SPECIFIC_PASSWORD`：用于公证的 app-specific password
+
+如果不配置这些 secrets，工作流仍会发布 `.dmg` 和 `.zip`，但用户首次打开时可能需要手动在 Gatekeeper 中放行。
+
 ## 首次运行所需权限
 
 应用正常工作需要以下 macOS 权限：
@@ -107,7 +165,8 @@ make clean    # 清理构建产物
 - [`AppBundle/AppIcon.icns`](/Users/seekergao/Code/demo/mac-voice-input/AppBundle/AppIcon.icns)：应用图标
 - [`Tools/generate_icon.swift`](/Users/seekergao/Code/demo/mac-voice-input/Tools/generate_icon.swift)：图标生成脚本
 - [`docs/README-Screenshot-Template.md`](/Users/seekergao/Code/demo/mac-voice-input/docs/README-Screenshot-Template.md)：README 截图模板
-- [`docs/DEVELOPMENT.md`](/Users/seekergao/Code/demo/mac-voice-input/docs/DEVELOPMENT.md)：开发与维护说明
+- [`docs/DEVELOPMENT.md`](/Users/seekergao/Code/demo/mac-voice-input/docs/DEVELOPMENT.md)：英文开发与维护说明
+- [`docs/DEVELOPMENT.zh-CN.md`](/Users/seekergao/Code/demo/mac-voice-input/docs/DEVELOPMENT.zh-CN.md)：中文开发与维护说明
 - [`Makefile`](/Users/seekergao/Code/demo/mac-voice-input/Makefile)：构建、运行、安装命令
 
 ## 仓库整理建议
@@ -139,6 +198,8 @@ make clean    # 清理构建产物
 ```bash
 make build
 ```
+
+GitHub Actions 也会在 macOS 环境中自动校验构建，并在 tag 或 `main` 推送时发布可下载安装包。
 
 但麦克风权限、语音识别、全局 `Fn` 监听、输入法切换、文本注入等运行时行为，仍需要在真实 macOS 环境下完成实际测试。
 
