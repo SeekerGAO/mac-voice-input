@@ -5,6 +5,27 @@
 - `make build`: compile the SwiftPM executable, package the `.app`, and apply ad-hoc signing
 - `make run`: build and launch the generated app bundle
 - `make install`: copy the app bundle into `/Applications`
+- `./scripts/release_package.sh v1.0.0`: build a distributable zip and checksum in `dist/`
+
+## CI/CD
+
+- `.github/workflows/ci.yml`: builds the app on macOS for pushes to `main` and pull requests, then uploads a CI artifact
+- `.github/workflows/release.yml`: builds and publishes a tagged release to GitHub Releases
+- `scripts/release_package.sh`: shared packaging script used by the release workflow
+
+## Release Process
+
+1. Merge tested changes into `main`
+2. Create and push a semantic version tag such as `v1.0.0`
+3. Wait for the `Release` GitHub Actions workflow to finish
+4. Download the generated assets from GitHub Releases and smoke-test the packaged app
+
+Release output:
+
+- `MacVoiceInput-<tag>.zip`
+- `MacVoiceInput-<tag>.zip.sha256`
+
+Optional Apple signing and notarization can be enabled through GitHub repository secrets for a smoother end-user install flow.
 
 ## Runtime Architecture
 
@@ -35,4 +56,3 @@
 - Add a repeatable manual QA checklist for permission flows on a clean macOS account
 - Capture real screenshots and store them under `docs/images/`
 - Add lightweight unit coverage for non-AppKit logic such as settings parsing and permission state mapping
-- Consider a dedicated release script if the app will be distributed outside local development

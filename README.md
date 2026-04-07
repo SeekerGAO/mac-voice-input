@@ -63,6 +63,47 @@ Generated app bundle:
 .build/release/MacVoiceInput.app
 ```
 
+## Development To Release Workflow
+
+This repository includes a GitHub Actions pipeline for both day-to-day development and distributable releases:
+
+- `CI` workflow: runs on pushes to `main` and on pull requests, builds the app with `make build`, and uploads a zipped `.app` bundle as a workflow artifact
+- `Release` workflow: runs when you push a tag like `v1.0.0`, builds the macOS app, packages it into a versioned zip file, generates a SHA-256 checksum, and publishes both files to GitHub Releases
+
+Typical flow:
+
+```bash
+git checkout main
+git pull
+# make changes
+git push origin main
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Release assets are generated under:
+
+```bash
+dist/MacVoiceInput-v1.0.0.zip
+dist/MacVoiceInput-v1.0.0.zip.sha256
+```
+
+Users can download the packaged app directly from the GitHub Release page.
+
+### Optional Signing And Notarization
+
+For the smoothest install experience on other Macs, configure these repository secrets before publishing releases:
+
+- `APPLE_CERTIFICATE_BASE64`: base64-encoded Developer ID Application certificate (`.p12`)
+- `APPLE_CERTIFICATE_PASSWORD`: password for the `.p12` certificate
+- `APPLE_KEYCHAIN_PASSWORD`: temporary keychain password used in GitHub Actions
+- `APPLE_SIGNING_IDENTITY`: full signing identity, for example `Developer ID Application: Your Name (TEAMID)`
+- `APPLE_TEAM_ID`: Apple Developer team ID
+- `APPLE_ID`: Apple ID used for notarization
+- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization
+
+If these secrets are not set, the release workflow still publishes a downloadable app zip, but Gatekeeper may require users to manually approve the app on first launch.
+
 ## Permissions
 
 The app needs these macOS permissions to function correctly:
@@ -139,6 +180,8 @@ The project has been verified with:
 ```bash
 make build
 ```
+
+GitHub Actions also verifies repository builds on macOS and can publish release assets from version tags.
 
 Runtime behavior still needs to be validated on a real macOS machine with the required permissions granted.
 
