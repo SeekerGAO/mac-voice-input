@@ -27,6 +27,11 @@ final class SpeechRecognizerService: @unchecked Sendable {
         static let meter: TimeInterval = 1.0 / 30.0
     }
 
+    private enum Meter {
+        static let floor: CGFloat = 0.18
+        static let count = 5
+    }
+
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -131,11 +136,18 @@ final class SpeechRecognizerService: @unchecked Sendable {
         let format = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         var meterEnvelope: Float = 0.1
+        var meterPhase: Float = 0
         let weights = self.weights
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, request] buffer, _ in
             guard let self else { return }
             request.append(buffer)
-            let bars = Self.makeMeterLevels(from: buffer, weights: weights, envelope: &meterEnvelope)
+            meterPhase += 0.22
+            let bars = Self.makeMeterLevels(
+                from: buffer,
+                weights: weights,
+                envelope: &meterEnvelope,
+                phase: meterPhase
+            )
             self.scheduleMeterDelivery(bars)
         }
 
@@ -185,13 +197,18 @@ final class SpeechRecognizerService: @unchecked Sendable {
         }
     }
 
-    private static func makeMeterLevels(from buffer: AVAudioPCMBuffer, weights: [Float], envelope: inout Float) -> [CGFloat] {
+    private static func makeMeterLevels(
+        from buffer: AVAudioPCMBuffer,
+        weights: [Float],
+        envelope: inout Float,
+        phase: Float
+    ) -> [CGFloat] {
         guard let samples = buffer.floatChannelData?.pointee else {
-            return Array(repeating: 0.18, count: 5)
+            return Array(repeating: Meter.floor, count: Meter.count)
         }
         let frameLength = Int(buffer.frameLength)
         if frameLength == 0 {
-            return Array(repeating: 0.18, count: 5)
+            return Array(repeating: Meter.floor, count: Meter.count)
         }
 
         var rms: Float = 0
@@ -201,10 +218,11 @@ final class SpeechRecognizerService: @unchecked Sendable {
         let smoothing: Float = normalized > envelope ? 0.4 : 0.15
         envelope += (normalized - envelope) * smoothing
 
-        return weights.map { weight in
-            let jitter = Float.random(in: -0.04 ... 0.04)
-            let level = min(max(0.18 + (envelope * weight * 0.82), 0.18), 1.0) * (1 + jitter)
-            return CGFloat(min(max(level, 0.18), 1.0))
+        return weights.enumerated().map { index, weight in
+            let baseLevel = Meter.floor + CGFloat(envelope * weight * 0.82)
+            let wobble = CGFloat(sinf(phase + (Float(index) * 0.7)) * 0.025)
+            let clampedLevel = min(1.0, max(Meter.floor, baseLevel + wobble))
+            return clampedLevel
         }
     }
 

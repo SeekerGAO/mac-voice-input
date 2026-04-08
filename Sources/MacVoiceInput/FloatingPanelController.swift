@@ -57,7 +57,7 @@ final class FloatingPanelController {
     }
 
     func updateMeter(levels: [CGFloat]) {
-        guard levels.count == 5 else { return }
+        guard isVisible, levels.count == 5 else { return }
         viewModel.barLevels = levels
     }
 

@@ -535,6 +535,14 @@ extension LLMRefinerError {
             case .japanese: return "ローカル開発の localhost を除き、HTTPS のみ利用できます。"
             case .korean: return "로컬 개발용 localhost를 제외하면 HTTPS 엔드포인트만 허용됩니다."
             }
+        case .unsupportedBaseURLComponents:
+            switch language {
+            case .english: return "API Base URL must not include embedded credentials, query parameters, or fragments."
+            case .simplifiedChinese: return "API Base URL 不能包含内嵌凭据、查询参数或片段。"
+            case .traditionalChinese: return "API Base URL 不能包含內嵌憑證、查詢參數或片段。"
+            case .japanese: return "API Base URL に埋め込み認証情報、クエリ、フラグメントは含められません。"
+            case .korean: return "API Base URL에는 내장 자격 증명, 쿼리 파라미터, 프래그먼트를 포함할 수 없습니다."
+            }
         case .badStatus(let statusCode):
             switch language {
             case .english: return "Server returned HTTP \(statusCode)."

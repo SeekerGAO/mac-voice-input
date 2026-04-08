@@ -32,6 +32,7 @@ struct ChatCompletionResponse: Decodable {
 enum LLMRefinerError: LocalizedError {
     case invalidBaseURL
     case insecureBaseURL
+    case unsupportedBaseURLComponents
     case badStatus(Int)
     case emptyResponse
     case transcriptTooLong
@@ -42,6 +43,8 @@ enum LLMRefinerError: LocalizedError {
             return "Invalid API Base URL."
         case .insecureBaseURL:
             return "Only HTTPS API endpoints are allowed, except localhost for local development."
+        case .unsupportedBaseURLComponents:
+            return "API Base URL must not include embedded credentials, query parameters, or fragments."
         case .badStatus(let statusCode):
             return "Server returned HTTP \(statusCode)."
         case .emptyResponse:
@@ -54,6 +57,11 @@ enum LLMRefinerError: LocalizedError {
 
 struct LLMRefiner {
     private let maxTranscriptLength = 4000
+    private let session: URLSession
+
+    init(session: URLSession = Self.makeSession()) {
+        self.session = session
+    }
 
     func refine(text: String, configuration: LLMConfiguration) async throws -> String {
         guard text.count <= maxTranscriptLength else {
@@ -61,6 +69,7 @@ struct LLMRefiner {
         }
         let endpoint = try endpointURL(from: configuration.baseURL)
         var request = URLRequest(url: endpoint)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
@@ -86,7 +95,7 @@ struct LLMRefiner {
         )
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw LLMRefinerError.emptyResponse
         }
@@ -107,28 +116,51 @@ struct LLMRefiner {
     }
 
     private func endpointURL(from baseURL: String) throws -> URL {
-        guard var url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host?.lowercased() else {
             throw LLMRefinerError.invalidBaseURL
         }
-        if !isAllowedScheme(url) {
+        if !isAllowedScheme(scheme: scheme, host: host) {
             throw LLMRefinerError.insecureBaseURL
         }
-        if !url.path.hasSuffix("/chat/completions") {
-            url.append(path: "chat")
-            url.append(path: "completions")
+        let hasForbiddenComponents =
+            components.user != nil ||
+            components.password != nil ||
+            components.query != nil ||
+            components.fragment != nil
+        guard !hasForbiddenComponents else {
+            throw LLMRefinerError.unsupportedBaseURLComponents
+        }
+        var path = components.path
+        if !path.hasSuffix("/chat/completions") {
+            path = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            components.path = path.isEmpty ? "/chat/completions" : "/\(path)/chat/completions"
+        }
+        guard let url = components.url else {
+            throw LLMRefinerError.invalidBaseURL
         }
         return url
     }
 
-    private func isAllowedScheme(_ url: URL) -> Bool {
-        guard let scheme = url.scheme?.lowercased() else { return false }
+    private func isAllowedScheme(scheme: String, host: String) -> Bool {
         if scheme == "https" {
             return true
         }
         if scheme == "http" {
-            let host = url.host?.lowercased() ?? ""
             return host == "localhost" || host == "127.0.0.1"
         }
         return false
+    }
+
+    private static func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
     }
 }
