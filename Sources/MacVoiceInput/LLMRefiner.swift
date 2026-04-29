@@ -83,7 +83,7 @@ struct LLMRefiner {
                     role: "system",
                     content: systemPrompt(options: options)
                 ),
-                .init(role: "user", content: text)
+                .init(role: "user", content: userPrompt(text: text, options: options))
             ]
         )
         request.httpBody = try JSONEncoder().encode(body)
@@ -109,7 +109,8 @@ struct LLMRefiner {
             outputMode: .conservativeCorrection,
             sourceLanguage: .simplifiedChinese,
             translationTarget: .english,
-            personalDictionaryTerms: ["Python", "JSON"]
+            personalDictionaryTerms: ["Python", "JSON"],
+            selectedText: nil
         )
         return try await refine(text: "配森 和 杰森", configuration: configuration, options: options)
     }
@@ -173,7 +174,30 @@ struct LLMRefiner {
             Preserve names, product terms, technical terms, dates, numbers, URLs, and code identifiers.
             \(dictionaryPrompt)
             """
+        case .editSelectedText:
+            return """
+            \(base)
+            The user selected existing text and then dictated an edit instruction.
+            Apply the dictated instruction to the selected text.
+            Return only the replacement text for the selection.
+            Preserve the selected text's language unless the instruction asks for translation.
+            Preserve names, dates, numbers, URLs, code identifiers, and technical terms.
+            If the instruction is ambiguous, make the smallest useful edit.
+            \(dictionaryPrompt)
+            """
         }
+    }
+
+    private func userPrompt(text: String, options: VoiceProcessingOptions) -> String {
+        guard options.outputMode == .editSelectedText else { return text }
+        let selectedText = options.selectedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return """
+        Selected text:
+        \(selectedText)
+
+        Dictated edit instruction:
+        \(text)
+        """
     }
 
     private func personalDictionaryPrompt(terms: [String]) -> String {

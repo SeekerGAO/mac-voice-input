@@ -126,7 +126,8 @@ final class SettingsStore: ObservableObject {
             outputMode: outputMode,
             sourceLanguage: selectedLanguage,
             translationTarget: translationTargetLanguage,
-            personalDictionaryTerms: personalDictionaryTerms
+            personalDictionaryTerms: personalDictionaryTerms,
+            selectedText: nil
         )
     }
 }

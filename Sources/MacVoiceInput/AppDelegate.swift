@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let speechRecognizer = SpeechRecognizerService()
     private let hotkeyMonitor = HotkeyMonitor()
     private let textInjector = TextInjector()
+    private let selectedTextReader = SelectedTextReader()
     private let llmRefiner = LLMRefiner()
     private let historyStore = DictationHistoryStore()
 
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindowController: OnboardingWindowController?
     private var captureState: CaptureState = .idle
     private var pendingStopSessionID: UUID?
+    private var activeProcessingOptions: VoiceProcessingOptions?
     private var lastUserMessage: String?
     private var lastRenderedMenuState: MenuState?
     private var rebuildMenuTask: Task<Void, Never>?
@@ -437,6 +439,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             captureState = .starting(sessionID)
             pendingStopSessionID = nil
             lastUserMessage = nil
+            activeProcessingOptions = nil
+
+            var processingOptions = settings.voiceProcessingOptions
+            if settings.outputMode == .editSelectedText {
+                guard settings.llmEnabled, settings.llmConfiguration != nil else {
+                    captureState = .idle
+                    showUserMessage(strings.editSelectedTextNeedsLLM)
+                    floatingPanel.showMessage(strings.editSelectedTextNeedsLLM)
+                    try? await Task.sleep(for: .seconds(1))
+                    floatingPanel.hide()
+                    return
+                }
+                let selectedText = await selectedTextReader.readSelectedText()
+                guard selectedText != nil else {
+                    captureState = .idle
+                    showUserMessage(strings.selectedTextRequired)
+                    floatingPanel.showMessage(strings.selectedTextRequired)
+                    try? await Task.sleep(for: .seconds(1))
+                    floatingPanel.hide()
+                    return
+                }
+                processingOptions = processingOptions.withSelectedText(selectedText)
+            }
+            activeProcessingOptions = processingOptions
             floatingPanel.showListening()
 
             do {
@@ -510,6 +536,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if case .processing(let activeSessionID) = captureState, activeSessionID == sessionID {
                     captureState = .idle
                 }
+                activeProcessingOptions = nil
             }
 
             guard !transcript.isEmpty else {
@@ -517,6 +544,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            let processingOptions = activeProcessingOptions ?? settings.voiceProcessingOptions
             var finalText = transcript
             if settings.llmEnabled, settings.outputMode.requiresLLM, let configuration = settings.llmConfiguration {
                 floatingPanel.showRefining(with: transcript)
@@ -524,7 +552,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     finalText = try await refineWithTimeout(
                         text: transcript,
                         configuration: configuration,
-                        options: settings.voiceProcessingOptions
+                        options: processingOptions
                     )
                 } catch {
                     if let refinementError = error as? RefinementError, refinementError == .timeout {
@@ -536,7 +564,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            historyStore.add(rawTranscript: transcript, finalText: finalText, options: settings.voiceProcessingOptions)
+            historyStore.add(rawTranscript: transcript, finalText: finalText, options: processingOptions)
             await textInjector.inject(finalText)
             invalidateMenuState()
             floatingPanel.hide()

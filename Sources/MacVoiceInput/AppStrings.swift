@@ -351,6 +351,26 @@ struct AppStrings {
         }
     }
 
+    var selectedTextRequired: String {
+        switch language {
+        case .english: return "Select text before using Edit Selected Text mode."
+        case .simplifiedChinese: return "使用编辑选中文本模式前，请先选中文本。"
+        case .traditionalChinese: return "使用編輯選中文本模式前，請先選中文本。"
+        case .japanese: return "選択テキスト編集モードを使う前にテキストを選択してください。"
+        case .korean: return "선택한 텍스트 편집 모드를 사용하기 전에 텍스트를 선택하세요."
+        }
+    }
+
+    var editSelectedTextNeedsLLM: String {
+        switch language {
+        case .english: return "Enable and configure LLM before editing selected text."
+        case .simplifiedChinese: return "编辑选中文本前，请先启用并配置 LLM。"
+        case .traditionalChinese: return "編輯選中文本前，請先啟用並設定 LLM。"
+        case .japanese: return "選択テキストを編集する前に LLM を有効化して設定してください。"
+        case .korean: return "선택한 텍스트를 편집하기 전에 LLM을 켜고 설정하세요."
+        }
+    }
+
     var permissionAccessHint: String {
         switch language {
         case .english: return "Grant Accessibility and Input Monitoring"

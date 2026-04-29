@@ -20,6 +20,7 @@ For Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
 - Clipboard-based paste injection with temporary ASCII input-source switching for CJK IMEs
 - Optional LLM refinement with configurable API base URL, API key, and model
 - AI output modes: raw transcript, light correction, polished message, email tone, bullet list, and translation
+- Selected-text voice editing for rewriting, shortening, translating, or otherwise changing highlighted text
 - Personal dictionary terms for names, product words, acronyms, and technical vocabulary
 - Translation mode with a configurable target language
 - Local dictation history with copy and clear actions

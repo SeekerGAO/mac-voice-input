@@ -7,6 +7,7 @@ enum VoiceOutputMode: String, CaseIterable, Codable, Identifiable {
     case email
     case bulletList
     case translation
+    case editSelectedText
 
     var id: String { rawValue }
 
@@ -51,6 +52,12 @@ enum VoiceOutputMode: String, CaseIterable, Codable, Identifiable {
         case (.translation, .traditionalChinese): return "翻譯"
         case (.translation, .japanese): return "翻訳"
         case (.translation, .korean): return "번역"
+
+        case (.editSelectedText, .english): return "Edit Selected Text"
+        case (.editSelectedText, .simplifiedChinese): return "编辑选中文本"
+        case (.editSelectedText, .traditionalChinese): return "編輯選中文本"
+        case (.editSelectedText, .japanese): return "選択テキストを編集"
+        case (.editSelectedText, .korean): return "선택한 텍스트 편집"
         }
     }
 }
@@ -60,4 +67,15 @@ struct VoiceProcessingOptions {
     let sourceLanguage: LanguageOption
     let translationTarget: LanguageOption
     let personalDictionaryTerms: [String]
+    let selectedText: String?
+
+    func withSelectedText(_ selectedText: String?) -> VoiceProcessingOptions {
+        VoiceProcessingOptions(
+            outputMode: outputMode,
+            sourceLanguage: sourceLanguage,
+            translationTarget: translationTarget,
+            personalDictionaryTerms: personalDictionaryTerms,
+            selectedText: selectedText
+        )
+    }
 }
