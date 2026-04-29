@@ -68,6 +68,7 @@ struct VoiceProcessingOptions {
     let translationTarget: LanguageOption
     let personalDictionaryTerms: [String]
     let selectedText: String?
+    let appContext: AppContext?
 
     func withSelectedText(_ selectedText: String?) -> VoiceProcessingOptions {
         VoiceProcessingOptions(
@@ -75,7 +76,19 @@ struct VoiceProcessingOptions {
             sourceLanguage: sourceLanguage,
             translationTarget: translationTarget,
             personalDictionaryTerms: personalDictionaryTerms,
-            selectedText: selectedText
+            selectedText: selectedText,
+            appContext: appContext
+        )
+    }
+
+    func withAppContext(_ appContext: AppContext?) -> VoiceProcessingOptions {
+        VoiceProcessingOptions(
+            outputMode: outputMode,
+            sourceLanguage: sourceLanguage,
+            translationTarget: translationTarget,
+            personalDictionaryTerms: personalDictionaryTerms,
+            selectedText: selectedText,
+            appContext: appContext
         )
     }
 }

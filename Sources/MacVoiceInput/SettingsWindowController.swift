@@ -103,6 +103,8 @@ private struct SettingsView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .disabled(settings.outputMode != .translation)
+
+                Toggle(localizedAppStyleHintsLabel(for: settings.selectedLanguage), isOn: $settings.appStyleHintsEnabled)
             }
 
             Group {
@@ -336,6 +338,16 @@ private struct SettingsView: View {
         case .traditionalChinese: return "觸發快捷鍵"
         case .japanese: return "起動キー"
         case .korean: return "활성화 단축키"
+        }
+    }
+
+    private func localizedAppStyleHintsLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Use app-specific style hints"
+        case .simplifiedChinese: return "使用按 App 自动风格"
+        case .traditionalChinese: return "使用按 App 自動風格"
+        case .japanese: return "アプリ別スタイルを使用"
+        case .korean: return "앱별 스타일 사용"
         }
     }
 

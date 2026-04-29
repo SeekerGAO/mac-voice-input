@@ -21,6 +21,7 @@ For Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
 - Optional LLM refinement with configurable API base URL, API key, and model
 - AI output modes: raw transcript, light correction, polished message, email tone, bullet list, and translation
 - Selected-text voice editing for rewriting, shortening, translating, or otherwise changing highlighted text
+- App-specific style hints for chat, email, code editors, terminal apps, notes, and browsers
 - Personal dictionary terms for names, product words, acronyms, and technical vocabulary
 - Translation mode with a configurable target language
 - Local dictation history with copy and clear actions

@@ -19,6 +19,7 @@ final class SettingsStore: ObservableObject {
         static let personalDictionary = "personalDictionary"
         static let recordingMode = "recordingMode"
         static let activationHotkey = "activationHotkey"
+        static let appStyleHintsEnabled = "appStyleHintsEnabled"
     }
 
     @Published var selectedLanguage: LanguageOption {
@@ -74,6 +75,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(activationHotkey.rawValue, forKey: Keys.activationHotkey) }
     }
 
+    @Published var appStyleHintsEnabled: Bool {
+        didSet { defaults.set(appStyleHintsEnabled, forKey: Keys.appStyleHintsEnabled) }
+    }
+
     private let defaults: UserDefaults
     private let keychainStore: KeychainStore
     @Published private(set) var lastKeychainError: String?
@@ -93,6 +98,7 @@ final class SettingsStore: ObservableObject {
         self.personalDictionary = defaults.string(forKey: Keys.personalDictionary) ?? ""
         self.recordingMode = defaults.string(forKey: Keys.recordingMode).flatMap(RecordingMode.init(rawValue:)) ?? .holdToRecord
         self.activationHotkey = defaults.string(forKey: Keys.activationHotkey).flatMap(ActivationHotkey.init(rawValue:)) ?? .fn
+        self.appStyleHintsEnabled = defaults.object(forKey: Keys.appStyleHintsEnabled) as? Bool ?? true
         self.apiKey = ""
 
         do {
@@ -127,7 +133,8 @@ final class SettingsStore: ObservableObject {
             sourceLanguage: selectedLanguage,
             translationTarget: translationTargetLanguage,
             personalDictionaryTerms: personalDictionaryTerms,
-            selectedText: nil
+            selectedText: nil,
+            appContext: appStyleHintsEnabled ? AppContext.current : nil
         )
     }
 }

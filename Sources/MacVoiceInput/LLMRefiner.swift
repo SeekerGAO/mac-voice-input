@@ -110,7 +110,8 @@ struct LLMRefiner {
             sourceLanguage: .simplifiedChinese,
             translationTarget: .english,
             personalDictionaryTerms: ["Python", "JSON"],
-            selectedText: nil
+            selectedText: nil,
+            appContext: nil
         )
         return try await refine(text: "配森 和 杰森", configuration: configuration, options: options)
     }
@@ -124,6 +125,7 @@ struct LLMRefiner {
         Source language: \(options.sourceLanguage.title).
         """
         let dictionaryPrompt = personalDictionaryPrompt(terms: options.personalDictionaryTerms)
+        let appPrompt = appStylePrompt(context: options.appContext)
 
         switch options.outputMode {
         case .rawTranscript:
@@ -131,6 +133,7 @@ struct LLMRefiner {
             \(base)
             Return the input exactly as-is.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .conservativeCorrection:
             return """
@@ -140,6 +143,7 @@ struct LLMRefiner {
             Do not rewrite, polish, reorder, summarize, or remove content that already looks correct.
             If the input already looks correct, return it exactly as-is.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .polishedMessage:
             return """
@@ -149,6 +153,7 @@ struct LLMRefiner {
             Keep the tone close to the speaker's tone.
             Keep it concise, but do not omit concrete details.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .email:
             return """
@@ -157,6 +162,7 @@ struct LLMRefiner {
             Add a concise greeting or closing only when the transcript clearly implies one.
             Preserve names, dates, numbers, requirements, and commitments.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .bulletList:
             return """
@@ -165,6 +171,7 @@ struct LLMRefiner {
             Use bullets for unordered points and numbers for an ordered procedure.
             Keep each item short and concrete.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .translation:
             return """
@@ -173,6 +180,7 @@ struct LLMRefiner {
             Produce fluent, natural text in the target language.
             Preserve names, product terms, technical terms, dates, numbers, URLs, and code identifiers.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         case .editSelectedText:
             return """
@@ -184,6 +192,7 @@ struct LLMRefiner {
             Preserve names, dates, numbers, URLs, code identifiers, and technical terms.
             If the instruction is ambiguous, make the smallest useful edit.
             \(dictionaryPrompt)
+            \(appPrompt)
             """
         }
     }
@@ -204,6 +213,31 @@ struct LLMRefiner {
         guard !terms.isEmpty else { return "" }
         let limitedTerms = terms.prefix(80).joined(separator: ", ")
         return "Personal dictionary terms to preserve or prefer when correcting recognition: \(limitedTerms)."
+    }
+
+    private func appStylePrompt(context: AppContext?) -> String {
+        guard let context else { return "" }
+        let categoryGuidance: String
+        switch context.category {
+        case .chat:
+            categoryGuidance = "For chat apps, prefer concise, natural, conversational wording. Avoid formal email structure unless requested."
+        case .email:
+            categoryGuidance = "For email apps, prefer clear professional wording with complete sentences. Avoid slang unless requested."
+        case .code:
+            categoryGuidance = "For code editors, preserve technical terms, symbols, identifiers, library names, casing, and short command-like phrasing."
+        case .terminal:
+            categoryGuidance = "For terminal apps, preserve commands, flags, paths, punctuation, casing, and code-like tokens exactly when possible."
+        case .notes:
+            categoryGuidance = "For notes apps, prefer structured notes, short paragraphs, bullets, and explicit action items when implied."
+        case .browser:
+            categoryGuidance = "For browsers, produce general-purpose text suitable for forms, comments, or search fields; keep it concise."
+        case .generic:
+            categoryGuidance = "Use a general-purpose writing style appropriate for the dictated content."
+        }
+        return """
+        Frontmost app: \(context.appName)\(context.bundleIdentifier.map { " (\($0))" } ?? "").
+        App-specific style guidance: \(categoryGuidance)
+        """
     }
 
     private func endpointURL(from baseURL: String) throws -> URL {

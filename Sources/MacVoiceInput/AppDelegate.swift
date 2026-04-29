@@ -110,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        Publishers.CombineLatest3(settings.$outputMode, settings.$translationTargetLanguage, settings.$personalDictionary)
+        Publishers.CombineLatest4(settings.$outputMode, settings.$translationTargetLanguage, settings.$personalDictionary, settings.$appStyleHintsEnabled)
             .dropFirst()
             .sink { [weak self] _ in
                 self?.invalidateMenuState()
@@ -134,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             llmConfigured: settings.llmConfiguration != nil,
             outputMode: settings.outputMode,
             translationTargetLanguage: settings.translationTargetLanguage,
+            appStyleHintsEnabled: settings.appStyleHintsEnabled,
             recordingMode: settings.recordingMode,
             activationHotkey: settings.activationHotkey,
             historySignature: historyStore.items.first?.id.uuidString ?? "",
@@ -229,6 +230,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         targetLanguageItem.submenu = targetLanguageMenu
         llmMenu.addItem(targetLanguageItem)
 
+        let appStyleItem = NSMenuItem(title: localizedAppStyleHintsTitle(), action: #selector(toggleAppStyleHints(_:)), keyEquivalent: "")
+        appStyleItem.target = self
+        appStyleItem.state = settings.appStyleHintsEnabled ? .on : .off
+        llmMenu.addItem(appStyleItem)
+
         let settingsItem = NSMenuItem(title: strings.settings, action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         llmMenu.addItem(settingsItem)
@@ -323,6 +329,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         settings.translationTargetLanguage = language
+        invalidateMenuState()
+    }
+
+    @objc
+    private func toggleAppStyleHints(_ sender: NSMenuItem) {
+        settings.appStyleHintsEnabled.toggle()
         invalidateMenuState()
     }
 
@@ -776,6 +788,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func localizedAppStyleHintsTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Use App-Specific Style"
+        case .simplifiedChinese: return "使用按 App 自动风格"
+        case .traditionalChinese: return "使用按 App 自動風格"
+        case .japanese: return "アプリ別スタイルを使用"
+        case .korean: return "앱별 스타일 사용"
+        }
+    }
+
     private var holdTooltip: String {
         let key = settings.activationHotkey.title(for: settings.selectedLanguage)
         switch settings.recordingMode {
@@ -924,6 +946,7 @@ private struct MenuState: Equatable {
     let llmConfigured: Bool
     let outputMode: VoiceOutputMode
     let translationTargetLanguage: LanguageOption
+    let appStyleHintsEnabled: Bool
     let recordingMode: RecordingMode
     let activationHotkey: ActivationHotkey
     let historySignature: String
