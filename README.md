@@ -2,15 +2,16 @@
 
 MacVoiceInput is a macOS 14+ menu-bar voice input app built with Swift and Swift Package Manager.
 
-Hold the `Fn` key to record, release it to transcribe speech and paste the final text into the currently focused input field. The app uses Apple's Speech framework for streaming transcription, shows a live floating HUD with waveform metering, and can optionally refine transcription through an OpenAI-compatible API.
+Use the configured activation key to record, then transcribe speech and paste the final text into the currently focused input field. The app uses Apple's Speech framework for streaming transcription, shows a live floating HUD with waveform metering, and can optionally refine transcription through an OpenAI-compatible API.
 
 For Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
 
 ## Features
 
 - Menu-bar only app (`LSUIElement`), no Dock icon
-- Hold `Fn` to record, release to inject text
-- Global `Fn` monitoring through CGEvent tap, with `Fn` event suppression to avoid the emoji picker
+- Configurable activation key: `Fn`, Right Option, or Right Control
+- Hold-to-record mode and tap-to-start/stop hands-free mode
+- Global modifier-key monitoring through CGEvent tap, with activation-key event suppression
 - Streaming speech recognition using Apple Speech
 - Default language set to Simplified Chinese (`zh-CN`)
 - Menu switching for English, Simplified Chinese, Traditional Chinese, Japanese, and Korean
@@ -21,6 +22,7 @@ For Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
 - AI output modes: raw transcript, light correction, polished message, email tone, bullet list, and translation
 - Personal dictionary terms for names, product words, acronyms, and technical vocabulary
 - Translation mode with a configurable target language
+- Local dictation history with copy and clear actions
 - Permission diagnostics menu and first-run onboarding
 - API key storage in Keychain
 
@@ -133,7 +135,7 @@ The app needs these macOS permissions to function correctly:
 - Accessibility
 - Input Monitoring
 
-Without Accessibility and Input Monitoring, global `Fn` monitoring and simulated paste will not work reliably.
+Without Accessibility and Input Monitoring, global activation-key monitoring and simulated paste will not work reliably.
 
 The menu bar includes a `Permission Diagnostics` section with:
 
@@ -154,11 +156,13 @@ The app includes an `LLM Refinement` submenu in the menu bar:
 - Configure API Base URL, API Key, and model
 - Maintain a personal dictionary
 
+The menu bar also includes recording mode, activation hotkey, and history submenus.
+
 The API must be OpenAI-compatible and support a `/chat/completions` style endpoint.
 
 ## Troubleshooting
 
-- If pressing `Fn` does nothing, confirm Accessibility and Input Monitoring are granted and reopen the app if macOS has not refreshed the event tap yet.
+- If pressing the activation key does nothing, confirm Accessibility and Input Monitoring are granted and reopen the app if macOS has not refreshed the event tap yet.
 - If recording starts and immediately fails, check Microphone and Speech Recognition permissions first.
 - If you are testing a newly built app, make sure you are launching `.build/release/MacVoiceInput.app` or reinstalling with `make install`; otherwise macOS may still be running an older copy from `/Applications`.
 - If pasted text looks wrong under a CJK IME, test with the target input field focused and confirm Accessibility permission is still granted.

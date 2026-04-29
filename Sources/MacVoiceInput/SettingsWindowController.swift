@@ -12,7 +12,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: hostingController)
         window.title = Self.windowTitle(for: settings.selectedLanguage)
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 560, height: 560))
+        window.setContentSize(NSSize(width: 560, height: 660))
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
@@ -63,6 +63,26 @@ private struct SettingsView: View {
         let strings = AppStrings(language: settings.selectedLanguage)
         VStack(alignment: .leading, spacing: 16) {
             keychainStatusBar(strings: strings)
+
+            Group {
+                Text(localizedRecordingModeLabel(for: settings.selectedLanguage))
+                Picker("", selection: $settings.recordingMode) {
+                    ForEach(RecordingMode.allCases) { mode in
+                        Text(mode.title(for: settings.selectedLanguage)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(localizedActivationHotkeyLabel(for: settings.selectedLanguage))
+                Picker("", selection: $settings.activationHotkey) {
+                    ForEach(ActivationHotkey.allCases) { hotkey in
+                        Text(hotkey.title(for: settings.selectedLanguage)).tag(hotkey)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
 
             Group {
                 Text(localizedOutputModeLabel(for: settings.selectedLanguage))
@@ -296,6 +316,26 @@ private struct SettingsView: View {
         case .traditionalChinese: return "AI 輸出模式"
         case .japanese: return "AI 出力モード"
         case .korean: return "AI 출력 모드"
+        }
+    }
+
+    private func localizedRecordingModeLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Recording Mode"
+        case .simplifiedChinese: return "录音模式"
+        case .traditionalChinese: return "錄音模式"
+        case .japanese: return "録音モード"
+        case .korean: return "녹음 모드"
+        }
+    }
+
+    private func localizedActivationHotkeyLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Activation Hotkey"
+        case .simplifiedChinese: return "触发快捷键"
+        case .traditionalChinese: return "觸發快捷鍵"
+        case .japanese: return "起動キー"
+        case .korean: return "활성화 단축키"
         }
     }
 

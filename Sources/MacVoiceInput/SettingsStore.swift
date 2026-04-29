@@ -17,6 +17,8 @@ final class SettingsStore: ObservableObject {
         static let outputMode = "outputMode"
         static let translationTargetLanguage = "translationTargetLanguage"
         static let personalDictionary = "personalDictionary"
+        static let recordingMode = "recordingMode"
+        static let activationHotkey = "activationHotkey"
     }
 
     @Published var selectedLanguage: LanguageOption {
@@ -64,6 +66,14 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(personalDictionary, forKey: Keys.personalDictionary) }
     }
 
+    @Published var recordingMode: RecordingMode {
+        didSet { defaults.set(recordingMode.rawValue, forKey: Keys.recordingMode) }
+    }
+
+    @Published var activationHotkey: ActivationHotkey {
+        didSet { defaults.set(activationHotkey.rawValue, forKey: Keys.activationHotkey) }
+    }
+
     private let defaults: UserDefaults
     private let keychainStore: KeychainStore
     @Published private(set) var lastKeychainError: String?
@@ -81,6 +91,8 @@ final class SettingsStore: ObservableObject {
         self.outputMode = defaults.string(forKey: Keys.outputMode).flatMap(VoiceOutputMode.init(rawValue:)) ?? .conservativeCorrection
         self.translationTargetLanguage = defaults.string(forKey: Keys.translationTargetLanguage).flatMap(LanguageOption.init(rawValue:)) ?? .english
         self.personalDictionary = defaults.string(forKey: Keys.personalDictionary) ?? ""
+        self.recordingMode = defaults.string(forKey: Keys.recordingMode).flatMap(RecordingMode.init(rawValue:)) ?? .holdToRecord
+        self.activationHotkey = defaults.string(forKey: Keys.activationHotkey).flatMap(ActivationHotkey.init(rawValue:)) ?? .fn
         self.apiKey = ""
 
         do {

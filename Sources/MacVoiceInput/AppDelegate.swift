@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeyMonitor = HotkeyMonitor()
     private let textInjector = TextInjector()
     private let llmRefiner = LLMRefiner()
+    private let historyStore = DictationHistoryStore()
 
     private var statusItem: NSStatusItem!
     private var settingsWindowController: SettingsWindowController?
@@ -39,11 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastUserMessage: String?
     private var lastRenderedMenuState: MenuState?
     private var rebuildMenuTask: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
     private var strings: AppStrings { AppStrings(language: settings.selectedLanguage) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configureServices()
+        configureSettingsObservers()
         configureNotifications()
         presentOnboardingIfNeeded()
     }
@@ -56,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "Voice Input")
         statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = strings.holdFnTooltip
+        statusItem.button?.toolTip = holdTooltip
         floatingPanel.setLanguage(settings.selectedLanguage)
         rebuildMenu()
     }
@@ -69,20 +73,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.floatingPanel.updateMeter(levels: levels)
         }
 
-        hotkeyMonitor.onFnPressed = { [weak self] in
+        hotkeyMonitor.onActivationPressed = { [weak self] in
             Task { @MainActor [weak self] in
-                self?.beginRecording()
+                self?.handleActivationPressed()
             }
         }
-        hotkeyMonitor.onFnReleased = { [weak self] in
+        hotkeyMonitor.onActivationReleased = { [weak self] in
             Task { @MainActor [weak self] in
-                self?.finishRecording()
+                self?.handleActivationReleased()
             }
         }
-        hotkeyMonitor.start()
+        hotkeyMonitor.start(activationHotkey: settings.activationHotkey)
         if !hotkeyMonitor.isMonitoringAvailable {
             showUserMessage(strings.permissionAccessHint)
         }
+    }
+
+    private func configureSettingsObservers() {
+        settings.$activationHotkey
+            .dropFirst()
+            .sink { [weak self] hotkey in
+                guard let self else { return }
+                self.hotkeyMonitor.refresh(activationHotkey: hotkey)
+                self.statusItem.button?.toolTip = self.holdTooltip
+                self.invalidateMenuState()
+            }
+            .store(in: &cancellables)
+
+        settings.$recordingMode
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.statusItem.button?.toolTip = self?.holdTooltip
+                self?.invalidateMenuState()
+            }
+            .store(in: &cancellables)
+
+        Publishers.CombineLatest3(settings.$outputMode, settings.$translationTargetLanguage, settings.$personalDictionary)
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.invalidateMenuState()
+            }
+            .store(in: &cancellables)
     }
 
     private func configureNotifications() {
@@ -101,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             llmConfigured: settings.llmConfiguration != nil,
             outputMode: settings.outputMode,
             translationTargetLanguage: settings.translationTargetLanguage,
+            recordingMode: settings.recordingMode,
+            activationHotkey: settings.activationHotkey,
+            historySignature: historyStore.items.first?.id.uuidString ?? "",
             hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable,
             lastUserMessage: lastUserMessage
         )
@@ -199,6 +233,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         llmMenuItem.submenu = llmMenu
         menu.addItem(llmMenuItem)
 
+        let recordingModeItem = NSMenuItem(title: localizedRecordingModeMenuTitle(), action: nil, keyEquivalent: "")
+        let recordingModeMenu = NSMenu()
+        for mode in RecordingMode.allCases {
+            let item = NSMenuItem(title: mode.title(for: settings.selectedLanguage), action: #selector(selectRecordingMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = mode == settings.recordingMode ? .on : .off
+            recordingModeMenu.addItem(item)
+        }
+        recordingModeItem.submenu = recordingModeMenu
+        menu.addItem(recordingModeItem)
+
+        let hotkeyItem = NSMenuItem(title: localizedActivationHotkeyMenuTitle(), action: nil, keyEquivalent: "")
+        let hotkeyMenu = NSMenu()
+        for hotkey in ActivationHotkey.allCases {
+            let item = NSMenuItem(title: hotkey.title(for: settings.selectedLanguage), action: #selector(selectActivationHotkey(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = hotkey.rawValue
+            item.state = hotkey == settings.activationHotkey ? .on : .off
+            hotkeyMenu.addItem(item)
+        }
+        hotkeyItem.submenu = hotkeyMenu
+        menu.addItem(hotkeyItem)
+
+        let historyItem = NSMenuItem(title: localizedHistoryMenuTitle(), action: nil, keyEquivalent: "")
+        historyItem.submenu = makeHistoryMenu()
+        menu.addItem(historyItem)
+
         if diagnostics.hasBlockingIssue {
             let guidanceItem = NSMenuItem(title: strings.permissionsRequired, action: nil, keyEquivalent: "")
             guidanceItem.isEnabled = false
@@ -227,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         settings.selectedLanguage = language
-        statusItem.button?.toolTip = strings.holdFnTooltip
+        statusItem.button?.toolTip = holdTooltip
         floatingPanel.setLanguage(language)
         invalidateMenuState()
     }
@@ -260,6 +322,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settings.translationTargetLanguage = language
         invalidateMenuState()
+    }
+
+    @objc
+    private func selectRecordingMode(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let mode = RecordingMode(rawValue: rawValue) else {
+            return
+        }
+        settings.recordingMode = mode
+        statusItem.button?.toolTip = holdTooltip
+        invalidateMenuState()
+    }
+
+    @objc
+    private func selectActivationHotkey(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let hotkey = ActivationHotkey(rawValue: rawValue) else {
+            return
+        }
+        settings.activationHotkey = hotkey
     }
 
     @objc
@@ -322,7 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc
     private func rebuildMonitoring() {
         Task { @MainActor in
-            hotkeyMonitor.refresh()
+            hotkeyMonitor.refresh(activationHotkey: settings.activationHotkey)
             rebuildMenu()
             showUserMessage(strings.monitoringRebuilt)
         }
@@ -385,6 +467,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func handleActivationPressed() {
+        switch settings.recordingMode {
+        case .holdToRecord:
+            beginRecording()
+        case .toggleToRecord:
+            switch captureState {
+            case .idle:
+                beginRecording()
+            case .starting, .recording:
+                finishRecording()
+            case .processing:
+                return
+            }
+        }
+    }
+
+    private func handleActivationReleased() {
+        guard settings.recordingMode == .holdToRecord else { return }
+        finishRecording()
+    }
+
     private func finishRecording() {
         switch captureState {
         case .idle, .processing:
@@ -433,7 +536,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
+            historyStore.add(rawTranscript: transcript, finalText: finalText, options: settings.voiceProcessingOptions)
             await textInjector.inject(finalText)
+            invalidateMenuState()
             floatingPanel.hide()
         }
     }
@@ -475,13 +580,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestMediaPermissionsAndRefreshIfNeeded() async -> PermissionDiagnostics {
-        hotkeyMonitor.refresh()
+        hotkeyMonitor.refresh(activationHotkey: settings.activationHotkey)
         var diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
         if diagnostics.microphone == .notDetermined || diagnostics.speechRecognition == .notDetermined {
             NSApp.activate(ignoringOtherApps: true)
             await speechRecognizer.requestPermissions()
             try? await Task.sleep(for: .milliseconds(250))
-            hotkeyMonitor.refresh()
+            hotkeyMonitor.refresh(activationHotkey: settings.activationHotkey)
             diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
             invalidateMenuState()
         }
@@ -496,7 +601,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshPermissionDiagnostics() async -> PermissionDiagnostics {
-        hotkeyMonitor.refresh()
+        hotkeyMonitor.refresh(activationHotkey: settings.activationHotkey)
         let diagnostics = PermissionDiagnosticsService.current(hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable)
         invalidateMenuState()
         return diagnostics
@@ -642,6 +747,147 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .korean: return "번역 대상 언어"
         }
     }
+
+    private var holdTooltip: String {
+        let key = settings.activationHotkey.title(for: settings.selectedLanguage)
+        switch settings.recordingMode {
+        case .holdToRecord:
+            switch settings.selectedLanguage {
+            case .english: return "Hold \(key) to record voice input"
+            case .simplifiedChinese: return "按住 \(key) 开始语音输入"
+            case .traditionalChinese: return "按住 \(key) 開始語音輸入"
+            case .japanese: return "\(key) を押し続けて音声入力"
+            case .korean: return "\(key) 키를 길게 눌러 음성 입력"
+            }
+        case .toggleToRecord:
+            switch settings.selectedLanguage {
+            case .english: return "Tap \(key) to start or stop voice input"
+            case .simplifiedChinese: return "按一下 \(key) 开始或结束语音输入"
+            case .traditionalChinese: return "按一下 \(key) 開始或結束語音輸入"
+            case .japanese: return "\(key) を押して音声入力を開始/停止"
+            case .korean: return "\(key) 키를 눌러 음성 입력 시작/중지"
+            }
+        }
+    }
+
+    private func localizedRecordingModeMenuTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Recording Mode"
+        case .simplifiedChinese: return "录音模式"
+        case .traditionalChinese: return "錄音模式"
+        case .japanese: return "録音モード"
+        case .korean: return "녹음 모드"
+        }
+    }
+
+    private func localizedActivationHotkeyMenuTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Activation Hotkey"
+        case .simplifiedChinese: return "触发快捷键"
+        case .traditionalChinese: return "觸發快捷鍵"
+        case .japanese: return "起動キー"
+        case .korean: return "활성화 단축키"
+        }
+    }
+
+    private func localizedHistoryMenuTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "History"
+        case .simplifiedChinese: return "历史记录"
+        case .traditionalChinese: return "歷史記錄"
+        case .japanese: return "履歴"
+        case .korean: return "기록"
+        }
+    }
+
+    private func makeHistoryMenu() -> NSMenu {
+        let menu = NSMenu()
+        guard !historyStore.items.isEmpty else {
+            let emptyItem = NSMenuItem(title: localizedEmptyHistoryTitle(), action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            menu.addItem(emptyItem)
+            return menu
+        }
+
+        for item in historyStore.items.prefix(10) {
+            let menuItem = NSMenuItem(title: historyTitle(for: item), action: #selector(copyHistoryItem(_:)), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.representedObject = item.id.uuidString
+            menu.addItem(menuItem)
+        }
+        menu.addItem(.separator())
+        let clearItem = NSMenuItem(title: localizedClearHistoryTitle(), action: #selector(clearHistory), keyEquivalent: "")
+        clearItem.target = self
+        menu.addItem(clearItem)
+        return menu
+    }
+
+    @objc
+    private func copyHistoryItem(_ sender: NSMenuItem) {
+        guard let rawID = sender.representedObject as? String,
+              let id = UUID(uuidString: rawID),
+              let item = historyStore.item(with: id) else {
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(item.finalText, forType: .string)
+        showUserMessage(localizedCopiedHistoryTitle())
+    }
+
+    @objc
+    private func clearHistory() {
+        historyStore.clear()
+        showUserMessage(localizedHistoryClearedTitle())
+        invalidateMenuState()
+    }
+
+    private func historyTitle(for item: DictationHistoryItem) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let mode = item.outputMode.title(for: settings.selectedLanguage)
+        return "\(formatter.string(from: item.createdAt)) · \(mode) · \(historyStore.preview(for: item))"
+    }
+
+    private func localizedEmptyHistoryTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "No history yet"
+        case .simplifiedChinese: return "暂无历史记录"
+        case .traditionalChinese: return "暫無歷史記錄"
+        case .japanese: return "履歴はまだありません"
+        case .korean: return "기록이 아직 없습니다"
+        }
+    }
+
+    private func localizedClearHistoryTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Clear History"
+        case .simplifiedChinese: return "清空历史记录"
+        case .traditionalChinese: return "清空歷史記錄"
+        case .japanese: return "履歴を消去"
+        case .korean: return "기록 지우기"
+        }
+    }
+
+    private func localizedCopiedHistoryTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Copied history item."
+        case .simplifiedChinese: return "已复制历史记录。"
+        case .traditionalChinese: return "已複製歷史記錄。"
+        case .japanese: return "履歴項目をコピーしました。"
+        case .korean: return "기록 항목을 복사했습니다."
+        }
+    }
+
+    private func localizedHistoryClearedTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "History cleared."
+        case .simplifiedChinese: return "历史记录已清空。"
+        case .traditionalChinese: return "歷史記錄已清空。"
+        case .japanese: return "履歴を消去しました。"
+        case .korean: return "기록을 지웠습니다."
+        }
+    }
 }
 
 private struct MenuState: Equatable {
@@ -650,6 +896,9 @@ private struct MenuState: Equatable {
     let llmConfigured: Bool
     let outputMode: VoiceOutputMode
     let translationTargetLanguage: LanguageOption
+    let recordingMode: RecordingMode
+    let activationHotkey: ActivationHotkey
+    let historySignature: String
     let hotkeyMonitorAvailable: Bool
     let lastUserMessage: String?
 }

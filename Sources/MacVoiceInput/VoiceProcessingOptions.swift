@@ -1,6 +1,6 @@
 import Foundation
 
-enum VoiceOutputMode: String, CaseIterable, Identifiable {
+enum VoiceOutputMode: String, CaseIterable, Codable, Identifiable {
     case rawTranscript
     case conservativeCorrection
     case polishedMessage

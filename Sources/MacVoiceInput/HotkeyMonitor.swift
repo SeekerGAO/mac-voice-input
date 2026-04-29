@@ -2,16 +2,18 @@ import ApplicationServices
 import Foundation
 
 final class HotkeyMonitor {
-    var onFnPressed: (@Sendable () -> Void)?
-    var onFnReleased: (@Sendable () -> Void)?
+    var onActivationPressed: (@Sendable () -> Void)?
+    var onActivationReleased: (@Sendable () -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var isFnDown = false
+    private var isActivationDown = false
     private(set) var isMonitoringAvailable = false
+    private(set) var activationHotkey: ActivationHotkey = .fn
 
-    func start() {
+    func start(activationHotkey: ActivationHotkey = .fn) {
         guard eventTap == nil else { return }
+        self.activationHotkey = activationHotkey
         let mask = (1 << CGEventType.flagsChanged.rawValue)
         let callback: CGEventTapCallBack = { proxy, type, event, userInfo in
             let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userInfo!).takeUnretainedValue()
@@ -43,13 +45,14 @@ final class HotkeyMonitor {
         }
         runLoopSource = nil
         eventTap = nil
-        isFnDown = false
+        isActivationDown = false
         isMonitoringAvailable = false
     }
 
-    func refresh() {
+    func refresh(activationHotkey: ActivationHotkey? = nil) {
+        let nextHotkey = activationHotkey ?? self.activationHotkey
         stop()
-        start()
+        start(activationHotkey: nextHotkey)
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -65,20 +68,20 @@ final class HotkeyMonitor {
         }
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard keyCode == 63 else {
+        guard keyCode == activationHotkey.keyCode else {
             return Unmanaged.passUnretained(event)
         }
 
-        let fnActive = event.flags.contains(.maskSecondaryFn)
-        if fnActive, !isFnDown {
-            isFnDown = true
-            let handler = onFnPressed
+        let isActive = event.flags.contains(activationHotkey.activeFlag)
+        if isActive, !isActivationDown {
+            isActivationDown = true
+            let handler = onActivationPressed
             DispatchQueue.main.async {
                 handler?()
             }
-        } else if !fnActive, isFnDown {
-            isFnDown = false
-            let handler = onFnReleased
+        } else if !isActive, isActivationDown {
+            isActivationDown = false
+            let handler = onActivationReleased
             DispatchQueue.main.async {
                 handler?()
             }
