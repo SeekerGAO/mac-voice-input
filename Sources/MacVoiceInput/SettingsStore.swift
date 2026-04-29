@@ -14,6 +14,9 @@ final class SettingsStore: ObservableObject {
         static let apiBaseURL = "apiBaseURL"
         static let model = "model"
         static let hasSeenOnboarding = "hasSeenOnboarding"
+        static let outputMode = "outputMode"
+        static let translationTargetLanguage = "translationTargetLanguage"
+        static let personalDictionary = "personalDictionary"
     }
 
     @Published var selectedLanguage: LanguageOption {
@@ -49,6 +52,18 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hasSeenOnboarding, forKey: Keys.hasSeenOnboarding) }
     }
 
+    @Published var outputMode: VoiceOutputMode {
+        didSet { defaults.set(outputMode.rawValue, forKey: Keys.outputMode) }
+    }
+
+    @Published var translationTargetLanguage: LanguageOption {
+        didSet { defaults.set(translationTargetLanguage.rawValue, forKey: Keys.translationTargetLanguage) }
+    }
+
+    @Published var personalDictionary: String {
+        didSet { defaults.set(personalDictionary, forKey: Keys.personalDictionary) }
+    }
+
     private let defaults: UserDefaults
     private let keychainStore: KeychainStore
     @Published private(set) var lastKeychainError: String?
@@ -63,6 +78,9 @@ final class SettingsStore: ObservableObject {
         self.apiBaseURL = defaults.string(forKey: Keys.apiBaseURL) ?? ""
         self.model = defaults.string(forKey: Keys.model) ?? ""
         self.hasSeenOnboarding = defaults.object(forKey: Keys.hasSeenOnboarding) as? Bool ?? false
+        self.outputMode = defaults.string(forKey: Keys.outputMode).flatMap(VoiceOutputMode.init(rawValue:)) ?? .conservativeCorrection
+        self.translationTargetLanguage = defaults.string(forKey: Keys.translationTargetLanguage).flatMap(LanguageOption.init(rawValue:)) ?? .english
+        self.personalDictionary = defaults.string(forKey: Keys.personalDictionary) ?? ""
         self.apiKey = ""
 
         do {
@@ -82,5 +100,21 @@ final class SettingsStore: ObservableObject {
             return nil
         }
         return LLMConfiguration(baseURL: baseURL, apiKey: key, model: model)
+    }
+
+    var personalDictionaryTerms: [String] {
+        personalDictionary
+            .components(separatedBy: CharacterSet(charactersIn: "\n,，、;；"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var voiceProcessingOptions: VoiceProcessingOptions {
+        VoiceProcessingOptions(
+            outputMode: outputMode,
+            sourceLanguage: selectedLanguage,
+            translationTarget: translationTargetLanguage,
+            personalDictionaryTerms: personalDictionaryTerms
+        )
     }
 }

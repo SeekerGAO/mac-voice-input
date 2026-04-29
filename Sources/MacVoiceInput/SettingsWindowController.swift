@@ -12,7 +12,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: hostingController)
         window.title = Self.windowTitle(for: settings.selectedLanguage)
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 500, height: 300))
+        window.setContentSize(NSSize(width: 560, height: 560))
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
@@ -63,6 +63,43 @@ private struct SettingsView: View {
         let strings = AppStrings(language: settings.selectedLanguage)
         VStack(alignment: .leading, spacing: 16) {
             keychainStatusBar(strings: strings)
+
+            Group {
+                Text(localizedOutputModeLabel(for: settings.selectedLanguage))
+                Picker("", selection: $settings.outputMode) {
+                    ForEach(VoiceOutputMode.allCases) { mode in
+                        Text(mode.title(for: settings.selectedLanguage)).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+
+                Text(localizedTranslationTargetLabel(for: settings.selectedLanguage))
+                Picker("", selection: $settings.translationTargetLanguage) {
+                    ForEach(LanguageOption.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .disabled(settings.outputMode != .translation)
+            }
+
+            Group {
+                Text(localizedPersonalDictionaryLabel(for: settings.selectedLanguage))
+                TextEditor(text: $settings.personalDictionary)
+                    .font(.body)
+                    .frame(minHeight: 92)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+                    )
+                Text(localizedPersonalDictionaryHint(for: settings.selectedLanguage))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
 
             Group {
                 Text(strings.apiBaseURLLabel)
@@ -249,6 +286,46 @@ private struct SettingsView: View {
         case .traditionalChinese: return "成功"
         case .japanese: return "成功"
         case .korean: return "성공"
+        }
+    }
+
+    private func localizedOutputModeLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "AI Output Mode"
+        case .simplifiedChinese: return "AI 输出模式"
+        case .traditionalChinese: return "AI 輸出模式"
+        case .japanese: return "AI 出力モード"
+        case .korean: return "AI 출력 모드"
+        }
+    }
+
+    private func localizedTranslationTargetLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Translation Target"
+        case .simplifiedChinese: return "翻译目标语言"
+        case .traditionalChinese: return "翻譯目標語言"
+        case .japanese: return "翻訳先言語"
+        case .korean: return "번역 대상 언어"
+        }
+    }
+
+    private func localizedPersonalDictionaryLabel(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Personal Dictionary"
+        case .simplifiedChinese: return "个人词典"
+        case .traditionalChinese: return "個人詞典"
+        case .japanese: return "個人辞書"
+        case .korean: return "개인 사전"
+        }
+    }
+
+    private func localizedPersonalDictionaryHint(for language: LanguageOption) -> String {
+        switch language {
+        case .english: return "Add names, product terms, acronyms, and technical words. Separate with new lines, commas, or semicolons."
+        case .simplifiedChinese: return "添加人名、产品名、缩写和技术词；可用换行、逗号或分号分隔。"
+        case .traditionalChinese: return "添加人名、產品名、縮寫與技術詞；可用換行、逗號或分號分隔。"
+        case .japanese: return "人名、製品名、略語、専門用語を追加します。改行、カンマ、セミコロンで区切れます。"
+        case .korean: return "이름, 제품명, 약어, 기술 용어를 추가하세요. 줄바꿈, 쉼표, 세미콜론으로 구분할 수 있습니다."
         }
     }
 

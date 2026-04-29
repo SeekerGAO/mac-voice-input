@@ -99,6 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             language: settings.selectedLanguage,
             llmEnabled: settings.llmEnabled,
             llmConfigured: settings.llmConfiguration != nil,
+            outputMode: settings.outputMode,
+            translationTargetLanguage: settings.translationTargetLanguage,
             hotkeyMonitorAvailable: hotkeyMonitor.isMonitoringAvailable,
             lastUserMessage: lastUserMessage
         )
@@ -167,6 +169,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         enabledItem.isEnabled = settings.llmConfiguration != nil
         llmMenu.addItem(enabledItem)
 
+        let outputModeItem = NSMenuItem(title: localizedOutputModeMenuTitle(), action: nil, keyEquivalent: "")
+        let outputModeMenu = NSMenu()
+        for mode in VoiceOutputMode.allCases {
+            let item = NSMenuItem(title: mode.title(for: settings.selectedLanguage), action: #selector(selectOutputMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = mode == settings.outputMode ? .on : .off
+            outputModeMenu.addItem(item)
+        }
+        outputModeItem.submenu = outputModeMenu
+        llmMenu.addItem(outputModeItem)
+
+        let targetLanguageItem = NSMenuItem(title: localizedTranslationTargetMenuTitle(), action: nil, keyEquivalent: "")
+        let targetLanguageMenu = NSMenu()
+        for language in LanguageOption.allCases {
+            let item = NSMenuItem(title: language.title, action: #selector(selectTranslationTargetLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = language.rawValue
+            item.state = language == settings.translationTargetLanguage ? .on : .off
+            targetLanguageMenu.addItem(item)
+        }
+        targetLanguageItem.submenu = targetLanguageMenu
+        llmMenu.addItem(targetLanguageItem)
+
         let settingsItem = NSMenuItem(title: strings.settings, action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         llmMenu.addItem(settingsItem)
@@ -213,6 +239,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         settings.llmEnabled.toggle()
+        invalidateMenuState()
+    }
+
+    @objc
+    private func selectOutputMode(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let outputMode = VoiceOutputMode(rawValue: rawValue) else {
+            return
+        }
+        settings.outputMode = outputMode
+        invalidateMenuState()
+    }
+
+    @objc
+    private func selectTranslationTargetLanguage(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let language = LanguageOption(rawValue: rawValue) else {
+            return
+        }
+        settings.translationTargetLanguage = language
         invalidateMenuState()
     }
 
@@ -312,7 +358,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             floatingPanel.showListening()
 
             do {
-                try await speechRecognizer.start(language: settings.selectedLanguage)
+                try await speechRecognizer.start(
+                    language: settings.selectedLanguage,
+                    contextualStrings: settings.personalDictionaryTerms
+                )
                 guard case .starting(let activeSessionID) = captureState, activeSessionID == sessionID else {
                     _ = await speechRecognizer.stop()
                     return
@@ -366,10 +415,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             var finalText = transcript
-            if settings.llmEnabled, let configuration = settings.llmConfiguration {
+            if settings.llmEnabled, settings.outputMode.requiresLLM, let configuration = settings.llmConfiguration {
                 floatingPanel.showRefining(with: transcript)
                 do {
-                    finalText = try await refineWithTimeout(text: transcript, configuration: configuration)
+                    finalText = try await refineWithTimeout(
+                        text: transcript,
+                        configuration: configuration,
+                        options: settings.voiceProcessingOptions
+                    )
                 } catch {
                     if let refinementError = error as? RefinementError, refinementError == .timeout {
                         showUserMessage(strings.llmTimedOutFallback)
@@ -385,10 +438,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func refineWithTimeout(text: String, configuration: LLMConfiguration) async throws -> String {
+    private func refineWithTimeout(text: String, configuration: LLMConfiguration, options: VoiceProcessingOptions) async throws -> String {
         try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
-                try await self.llmRefiner.refine(text: text, configuration: configuration)
+                try await self.llmRefiner.refine(text: text, configuration: configuration, options: options)
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(8))
@@ -569,12 +622,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .korean: return "입력 모니터링(추정)"
         }
     }
+
+    private func localizedOutputModeMenuTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Output Mode"
+        case .simplifiedChinese: return "输出模式"
+        case .traditionalChinese: return "輸出模式"
+        case .japanese: return "出力モード"
+        case .korean: return "출력 모드"
+        }
+    }
+
+    private func localizedTranslationTargetMenuTitle() -> String {
+        switch settings.selectedLanguage {
+        case .english: return "Translation Target"
+        case .simplifiedChinese: return "翻译目标语言"
+        case .traditionalChinese: return "翻譯目標語言"
+        case .japanese: return "翻訳先言語"
+        case .korean: return "번역 대상 언어"
+        }
+    }
 }
 
 private struct MenuState: Equatable {
     let language: LanguageOption
     let llmEnabled: Bool
     let llmConfigured: Bool
+    let outputMode: VoiceOutputMode
+    let translationTargetLanguage: LanguageOption
     let hotkeyMonitorAvailable: Bool
     let lastUserMessage: String?
 }

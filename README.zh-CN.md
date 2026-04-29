@@ -18,6 +18,9 @@ MacVoiceInput 是一个基于 Swift 和 Swift Package Manager 开发的 macOS 14
 - 底部居中的浮动 HUD，显示实时转写文本和波形
 - 通过剪贴板 + 模拟 `Cmd+V` 注入文本，并在 CJK 输入法下临时切换到 ASCII 输入源后再恢复
 - 提供 LLM Refinement 子菜单，可配置 API Base URL、API Key、Model
+- 支持 AI 输出模式：原始转写、轻度纠错、润色成消息、邮件语气、项目符号/步骤、翻译
+- 支持个人词典，将人名、产品名、缩写和技术词同时用于语音识别上下文与 LLM 优化提示
+- 支持翻译模式，可选择目标语言后直接把语音转换为译文
 - 提供权限诊断菜单和首次启动引导
 - API Key 存储在钥匙串中
 
@@ -145,8 +148,11 @@ https://github.com/SeekerGAO/mac-voice-input/releases/tag/main-latest
 菜单栏中提供 `LLM Refinement` 子菜单，可用于：
 
 - 开启或关闭 LLM 纠错
+- 切换 AI 输出模式
+- 设置翻译目标语言
 - 打开设置窗口
 - 配置 API Base URL、API Key、Model
+- 维护个人词典
 
 接口需兼容 OpenAI 风格的 `/chat/completions`。
 

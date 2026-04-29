@@ -98,7 +98,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
         }
     }
 
-    func start(language: LanguageOption) async throws {
+    func start(language: LanguageOption, contextualStrings: [String] = []) async throws {
         try await requestPermissionsIfNeeded()
 
         recognitionTask?.cancel()
@@ -115,6 +115,7 @@ final class SpeechRecognizerService: @unchecked Sendable {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.requiresOnDeviceRecognition = false
+        request.contextualStrings = contextualStrings
         recognitionRequest = request
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in

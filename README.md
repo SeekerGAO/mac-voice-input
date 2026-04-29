@@ -18,6 +18,9 @@ For Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
 - Bottom-centered floating HUD with live transcript and waveform metering
 - Clipboard-based paste injection with temporary ASCII input-source switching for CJK IMEs
 - Optional LLM refinement with configurable API base URL, API key, and model
+- AI output modes: raw transcript, light correction, polished message, email tone, bullet list, and translation
+- Personal dictionary terms for names, product words, acronyms, and technical vocabulary
+- Translation mode with a configurable target language
 - Permission diagnostics menu and first-run onboarding
 - API key storage in Keychain
 
@@ -145,8 +148,11 @@ The menu bar includes a `Permission Diagnostics` section with:
 The app includes an `LLM Refinement` submenu in the menu bar:
 
 - Enable or disable refinement
+- Switch AI output modes
+- Select the translation target language
 - Open the settings window
 - Configure API Base URL, API Key, and model
+- Maintain a personal dictionary
 
 The API must be OpenAI-compatible and support a `/chat/completions` style endpoint.
 

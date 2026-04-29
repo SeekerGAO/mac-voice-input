@@ -63,7 +63,7 @@ struct LLMRefiner {
         self.session = session
     }
 
-    func refine(text: String, configuration: LLMConfiguration) async throws -> String {
+    func refine(text: String, configuration: LLMConfiguration, options: VoiceProcessingOptions) async throws -> String {
         guard text.count <= maxTranscriptLength else {
             throw LLMRefinerError.transcriptTooLong
         }
@@ -81,14 +81,7 @@ struct LLMRefiner {
             messages: [
                 .init(
                     role: "system",
-                    content: """
-                    You refine streaming speech-recognition output.
-                    Be extremely conservative.
-                    Only fix obvious recognition mistakes, such as Chinese homophone errors or English technical terms that were converted into wrong Chinese words.
-                    Never rewrite, polish, reorder, summarize, add punctuation beyond what is clearly implied, or remove any content that already looks correct.
-                    If the input already looks correct, return it exactly as-is.
-                    Return only the final corrected text.
-                    """
+                    content: systemPrompt(options: options)
                 ),
                 .init(role: "user", content: text)
             ]
@@ -112,7 +105,81 @@ struct LLMRefiner {
     }
 
     func test(configuration: LLMConfiguration) async throws -> String {
-        try await refine(text: "配森 和 杰森", configuration: configuration)
+        let options = VoiceProcessingOptions(
+            outputMode: .conservativeCorrection,
+            sourceLanguage: .simplifiedChinese,
+            translationTarget: .english,
+            personalDictionaryTerms: ["Python", "JSON"]
+        )
+        return try await refine(text: "配森 和 杰森", configuration: configuration, options: options)
+    }
+
+    private func systemPrompt(options: VoiceProcessingOptions) -> String {
+        let base = """
+        You convert streaming speech-recognition output into text the user can paste immediately.
+        Preserve the user's intent and factual content.
+        Do not add explanations, markdown fences, labels, alternatives, or commentary.
+        Return only the final text.
+        Source language: \(options.sourceLanguage.title).
+        """
+        let dictionaryPrompt = personalDictionaryPrompt(terms: options.personalDictionaryTerms)
+
+        switch options.outputMode {
+        case .rawTranscript:
+            return """
+            \(base)
+            Return the input exactly as-is.
+            \(dictionaryPrompt)
+            """
+        case .conservativeCorrection:
+            return """
+            \(base)
+            Be extremely conservative.
+            Only fix obvious speech recognition mistakes, repeated filler words, mistaken homophones, capitalization, and punctuation that is clearly implied.
+            Do not rewrite, polish, reorder, summarize, or remove content that already looks correct.
+            If the input already looks correct, return it exactly as-is.
+            \(dictionaryPrompt)
+            """
+        case .polishedMessage:
+            return """
+            \(base)
+            Rewrite the transcript into a natural message suitable for chat or comments.
+            Remove filler words, false starts, and accidental repetition.
+            Keep the tone close to the speaker's tone.
+            Keep it concise, but do not omit concrete details.
+            \(dictionaryPrompt)
+            """
+        case .email:
+            return """
+            \(base)
+            Rewrite the transcript as a clear, professional email or work message.
+            Add a concise greeting or closing only when the transcript clearly implies one.
+            Preserve names, dates, numbers, requirements, and commitments.
+            \(dictionaryPrompt)
+            """
+        case .bulletList:
+            return """
+            \(base)
+            Convert the transcript into a clean bullet list or numbered steps.
+            Use bullets for unordered points and numbers for an ordered procedure.
+            Keep each item short and concrete.
+            \(dictionaryPrompt)
+            """
+        case .translation:
+            return """
+            \(base)
+            Translate the transcript into \(options.translationTarget.title).
+            Produce fluent, natural text in the target language.
+            Preserve names, product terms, technical terms, dates, numbers, URLs, and code identifiers.
+            \(dictionaryPrompt)
+            """
+        }
+    }
+
+    private func personalDictionaryPrompt(terms: [String]) -> String {
+        guard !terms.isEmpty else { return "" }
+        let limitedTerms = terms.prefix(80).joined(separator: ", ")
+        return "Personal dictionary terms to preserve or prefer when correcting recognition: \(limitedTerms)."
     }
 
     private func endpointURL(from baseURL: String) throws -> URL {
